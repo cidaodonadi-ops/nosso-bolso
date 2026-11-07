@@ -1,24 +1,20 @@
-
-
-### Código Completo Atualizado com o Módulo de Autofinanciamento
-
-```jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
   PiggyBank, Plane, Wallet, Calculator, Settings, Mic, LogOut, Lock, Mail, RefreshCw, Repeat
 } from 'lucide-react';
+
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDeo0qlg76LOaUGMbqVwNZqLRURc1Qie5o",
-  authDomain: "nosso-bolso-efd5a.firebaseapp.com",
-  projectId: "nosso-bolso-efd5a",
-  storageBucket: "nosso-bolso-efd5a.firebasestorage.app",
-  messagingSenderId: "869567181107",
-  appId: "1:869567181107:web:f4d1da08c2c766489ece46"
+  apiKey: "SUA_API_KEY_AQUI",
+  authDomain: "seu-projeto.firebaseapp.com",
+  projectId: "seu-projeto",
+  storageBucket: "seu-projeto.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcde"
 };
 
 let app, auth, db;
@@ -138,7 +134,6 @@ export default function App() {
     return transacoes.filter(t => t.data && t.data.startsWith(mesFiltro));
   }, [transacoes, mesFiltro]);
 
-  // Lista consolidada de Autofinanciamentos ativos
   const autofinanciamentos = useMemo(() => {
     return transacoes.filter(t => t.eAutofinanciamento);
   }, [transacoes]);
@@ -299,7 +294,7 @@ export default function App() {
         <div className="max-w-md w-full bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-xl space-y-6">
           <div className="text-center">
             <div className="w-12 h-12 bg-blue-600 rounded-xl mx-auto flex items-center justify-center mb-3 shadow-lg">
-              <Wallet className="w-6 h-6 text-white" />
+              <Wallet className="w-6 h-6 text-white"/>
             </div>
             <h1 className="text-2xl font-bold">NossoBolso</h1>
             <p className="text-xs text-slate-400 mt-1">Controle Financeiro do Casal</p>
@@ -311,7 +306,7 @@ export default function App() {
             <div>
               <label className="text-xs font-semibold text-slate-400 block mb-1">E-mail de Acesso</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3"/>
                 <input 
                   type="email" required placeholder="casal@email.com"
                   value={emailLogin} onChange={(e) => setEmailLogin(e.target.value)}
@@ -323,7 +318,7 @@ export default function App() {
             <div>
               <label className="text-xs font-semibold text-slate-400 block mb-1">Senha</label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3"/>
                 <input 
                   type="password" required placeholder="••••••••"
                   value={senhaLogin} onChange={(e) => setSenhaLogin(e.target.value)}
@@ -346,7 +341,7 @@ export default function App() {
       <header className={`sticky top-0 z-50 ${modoEscuro ? 'bg-slate-800/90 border-slate-700' : 'bg-white/90 border-slate-200'} backdrop-blur-md border-b px-4 py-3 flex items-center justify-between`}>
         <div className="flex items-center gap-2">
           <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl text-white shadow-md">
-            <Wallet className="w-5 h-5" />
+            <Wallet className="w-5 h-5"/>
           </div>
           <div>
             <h1 className="font-bold text-lg leading-tight">NossoBolso</h1>
@@ -360,10 +355,10 @@ export default function App() {
             className={`text-sm px-3 py-1.5 rounded-lg border font-medium ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
           />
           <button onClick={() => setModoEscuro(!modoEscuro)} className={`p-2 rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-yellow-400' : 'bg-slate-100 border-slate-300 text-slate-600'}`}>
-            {modoEscuro ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {modoEscuro ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <button onClick={handleLogout} className="p-2 rounded-lg border bg-rose-500/10 text-rose-500 border-rose-500/30 hover:bg-rose-500/20" title="Sair">
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-4 h-4"/>
           </button>
         </div>
       </header>
@@ -387,7 +382,7 @@ export default function App() {
                   ativo ? 'bg-blue-600 text-white shadow-sm' : modoEscuro ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-4 h-4"/>
                 {aba.label}
               </button>
             );
@@ -418,13 +413,12 @@ export default function App() {
           </div>
         )}
 
-        {/* ABA: AUTOFINANCIAMENTO */}
         {abaAtiva === 'autofinanciamento' && (
           <div className="space-y-6">
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md`}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl">
-                  <RefreshCw className="w-6 h-6" />
+                  <RefreshCw className="w-6 h-6"/>
                 </div>
                 <div>
                   <h2 className="text-lg font-bold">Painel de Autofinanciamento</h2>
@@ -473,7 +467,6 @@ export default function App() {
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
                 
-                {/* Opção de Autofinanciamento */}
                 <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-900 flex items-center gap-2">
                   <input 
                     type="checkbox"
@@ -516,7 +509,7 @@ export default function App() {
                       </span>
                       {t.eAutofinanciamento && (
                         <span className="text-xs px-2 py-0.5 rounded font-semibold bg-indigo-600 text-white flex items-center gap-1">
-                          <Repeat className="w-3 h-3" /> Devolução Poupança ({t.parcelaAtual}/{t.parcelas})
+                          <Repeat className="w-3 h-3"/> Devolução Poupança ({t.parcelaAtual}/{t.parcelas})
                         </span>
                       )}
                       <span className="font-semibold text-sm">{t.descricao}</span>
@@ -524,7 +517,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-bold text-sm">R$ {Number(t.valor).toFixed(2)}</span>
-                    <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
                   </div>
                 </div>
               ))}
@@ -535,5 +528,3 @@ export default function App() {
     </div>
   );
 }
-
-```
