@@ -3,15 +3,7 @@
 ### Código Completo Atualizado com o Módulo de Autofinanciamento
 
 ```jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, LogOut, Lock, Mail, RefreshCw, Repeat
-} from 'lucide-react';
-
-import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
+const { useState, useEffect, useMemo } = React;
 
 const firebaseConfig = {
   apiKey: "AIzaSyDeo0qlg76LOaUGMbqVwNZqLRURc1Qie5o",
