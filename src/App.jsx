@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils, Edit3, X
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -40,6 +40,7 @@ const CATEGORIAS_PADRAO = [
   'Lazer & Superfaturados',
   'Saúde & Farmácia',
   'Investimentos / Aportes',
+  'Renda Extra / Serviços (Aporte)',
   'Autofinanciamento (Devolução)',
   'Férias / 13º / 1/3 (Viagens)',
   'Outros'
@@ -77,9 +78,8 @@ export default function App() {
     const salvo = localStorage.getItem('nossobolso_categorias');
     if (salvo) {
       const listaSalva = JSON.parse(salvo);
-      if (!listaSalva.includes('Investimentos / Aportes')) {
-        listaSalva.push('Investimentos / Aportes');
-      }
+      if (!listaSalva.includes('Investimentos / Aportes')) listaSalva.push('Investimentos / Aportes');
+      if (!listaSalva.includes('Renda Extra / Serviços (Aporte)')) listaSalva.push('Renda Extra / Serviços (Aporte)');
       return listaSalva;
     }
     return CATEGORIAS_PADRAO;
@@ -157,9 +157,8 @@ export default function App() {
           if (dados.perfis) setPerfis(dados.perfis);
           if (dados.categorias && Array.isArray(dados.categorias)) {
             let catNuvem = dados.categorias;
-            if (!catNuvem.includes('Investimentos / Aportes')) {
-              catNuvem.push('Investimentos / Aportes');
-            }
+            if (!catNuvem.includes('Investimentos / Aportes')) catNuvem.push('Investimentos / Aportes');
+            if (!catNuvem.includes('Renda Extra / Serviços (Aporte)')) catNuvem.push('Renda Extra / Serviços (Aporte)');
             setCategorias(catNuvem);
             localStorage.setItem('nossobolso_categorias', JSON.stringify(catNuvem));
           }
@@ -257,6 +256,9 @@ export default function App() {
     let totalInvestidoMes = 0;
     let investidoPequeno = 0;
     let investidoPequena = 0;
+    let totalRendaExtraMes = 0;
+    let rendaExtraPequeno = 0;
+    let rendaExtraPequena = 0;
     
     let gastosPorCategoria = {};
 
@@ -277,10 +279,17 @@ export default function App() {
         totalAutofinanciamentoMes += valor;
       }
 
+      // Separador de Investimentos Regulares vs Renda Extra Aporte
       if (cat.toLowerCase().includes('investimento') || cat.toLowerCase().includes('aporte')) {
         totalInvestidoMes += valor;
         if (t.pagador === 'pequeno') investidoPequeno += valor;
         if (t.pagador === 'pequena') investidoPequena += valor;
+      }
+
+      if (cat.toLowerCase().includes('renda extra') || cat.toLowerCase().includes('serviços')) {
+        totalRendaExtraMes += valor;
+        if (t.pagador === 'pequeno') rendaExtraPequeno += valor;
+        if (t.pagador === 'pequena') rendaExtraPequena += valor;
       }
 
       gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + valor;
@@ -327,6 +336,9 @@ export default function App() {
       totalInvestidoMes,
       investidoPequeno,
       investidoPequena,
+      totalRendaExtraMes,
+      rendaExtraPequeno,
+      rendaExtraPequena,
       gastosPorCategoria
     };
   }, [transacoes, transacoesDoMes, perfis, filtroPessoa]);
@@ -337,7 +349,6 @@ export default function App() {
     if (!form.descricao || isNaN(valorNumerico)) return;
 
     if (editandoTransacao) {
-      // Pergunta se deseja atualizar os próximos lançamentos do grupo (caso pertença a um parcelamento/grupo)
       let atualizarProximos = false;
       if (editandoTransacao.grupoId || editandoTransacao.parcelas > 1) {
         atualizarProximos = window.confirm(
@@ -356,7 +367,6 @@ export default function App() {
       };
 
       if (atualizarProximos && editandoTransacao.grupoId) {
-        // Atualiza a lista inteira do grupo a partir da parcela atual em diante
         const idGrupo = editandoTransacao.grupoId;
         const parcelaRef = editandoTransacao.parcelaAtual || 1;
 
@@ -377,7 +387,6 @@ export default function App() {
           return t;
         }));
       } else {
-        // Atualiza apenas a parcela individual selecionada
         if (db && usuario) {
           try {
             await updateDoc(doc(db, "transacoes", editandoTransacao.id), dadosAtualizados);
@@ -390,7 +399,6 @@ export default function App() {
 
       setEditandoTransacao(null);
     } else {
-      // Modo Novo Lançamento
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
       const valorParcela = valorNumerico / numParcelas;
 
@@ -451,7 +459,6 @@ export default function App() {
 
   const iniciarEdicaoTransacao = (t) => {
     setEditandoTransacao(t);
-    // Remove o indicador de parcela da descrição (ex: "(1/12)") para facilitar edição do texto
     const descLimpa = t.descricao.replace(/\s*\(\d+\/\d+\)$/, '');
     
     setForm({
@@ -696,31 +703,42 @@ export default function App() {
               </div>
             </div>
 
-            {/* Painel de Investimentos / Aportes Realizados */}
-            <div className={`p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md flex flex-col md:flex-row items-center justify-between gap-4 border-l-4 border-l-emerald-500`}>
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
-                  <PiggyBank className="w-6 h-6"/>
+            {/* Painel de Investimentos e Renda Extra Aportada */}
+            <div className={`p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4 border-l-4 border-l-emerald-500`}>
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                    <PiggyBank className="w-6 h-6"/>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm">Reserva / Investimentos Realizados ({mesFiltro})</h3>
+                    <p className="text-xs text-slate-400">Total guardado via aportes + renda extra de serviços.</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm">Reserva / Investimentos Realizados ({mesFiltro})</h3>
-                  <p className="text-xs text-slate-400">Total guardado pelo casal através de lançamentos de aportes.</p>
+                <div className="flex gap-4 text-right">
+                  <div>
+                    <span className="text-[10px] text-cyan-500 font-semibold block uppercase">Pequeno</span>
+                    <span className="text-sm font-bold">R$ {(calculos.investidoPequeno + calculos.rendaExtraPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
+                    <span className="text-[10px] text-pink-500 font-semibold block uppercase">Pequena</span>
+                    <span className="text-sm font-bold">R$ {(calculos.investidoPequena + calculos.rendaExtraPequena).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
+                    <span className="text-[10px] text-emerald-500 font-semibold block uppercase">Total Guardado</span>
+                    <span className="text-base font-bold text-emerald-600">R$ {(calculos.totalInvestidoMes + calculos.totalRendaExtraMes).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-4 text-right">
-                <div>
-                  <span className="text-[10px] text-cyan-500 font-semibold block uppercase">Pequeno</span>
-                  <span className="text-sm font-bold">R$ {calculos.investidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+
+              {calculos.totalRendaExtraMes > 0 && (
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                  <span className="text-emerald-500 font-semibold flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5"/> Inclui Renda Extra / Serviços (Aporte):
+                  </span>
+                  <span className="font-bold text-emerald-600">+ R$ {calculos.totalRendaExtraMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
-                  <span className="text-[10px] text-pink-500 font-semibold block uppercase">Pequena</span>
-                  <span className="text-sm font-bold">R$ {calculos.investidoPequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
-                  <span className="text-[10px] text-emerald-500 font-semibold block uppercase">Total Casal</span>
-                  <span className="text-base font-bold text-emerald-600">R$ {calculos.totalInvestidoMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Gráfico Visual Percentual de Categorias */}
@@ -739,7 +757,6 @@ export default function App() {
                 <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum gasto registrado para este mês com o filtro selecionado.</p>
               ) : (
                 <div className="space-y-4">
-                  {/* Barra Gráfica Segmentada Proporcional */}
                   <div className="w-full bg-slate-200 dark:bg-slate-700 h-4 rounded-full overflow-hidden flex shadow-inner">
                     {Object.entries(calculos.gastosPorCategoria).map(([cat, val], idx) => {
                       const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
@@ -761,7 +778,6 @@ export default function App() {
                     })}
                   </div>
 
-                  {/* Lista Detalhada com Percentuais */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                     {Object.entries(calculos.gastosPorCategoria).sort((a, b) => b[1] - a[1]).map(([cat, val], idx) => {
                       const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
