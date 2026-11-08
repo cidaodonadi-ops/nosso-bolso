@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -72,18 +72,20 @@ export default function App() {
     pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
 
-  const [categorias, setCategorias] = useState(CATEGORIAS_PADRAO);
+  const [categorias, setCategorias] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_categorias');
+    return salvo ? JSON.parse(salvo) : CATEGORIAS_PADRAO;
+  });
+
   const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
   const [transacoes, setTransacoes] = useState([]);
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
-  const [mensagemSucessoConfig, setMensagemSucessoConfig] = useState('');
+  const [statusAviso, setStatusAviso] = useState({ tipo: '', mensagem: '' });
 
   const [modoEscuro, setModoEscuro] = useState(() => {
     const temaSalvo = localStorage.getItem('nossobolso_tema');
-    if (temaSalvo !== null) {
-      return temaSalvo === 'escuro';
-    }
+    if (temaSalvo !== null) return temaSalvo === 'escuro';
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
@@ -116,7 +118,6 @@ export default function App() {
     return [...categorias].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
   }, [categorias]);
 
-  // Autenticação Firebase
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -125,7 +126,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Carregamento de Dados da Nuvem (Transações + Configurações)
   useEffect(() => {
     if (!usuario || !db) {
       const saved = localStorage.getItem('nossobolso_transacoes');
@@ -135,7 +135,6 @@ export default function App() {
 
     async function carregarDadosNuvem() {
       try {
-        // Carregar Transações
         const querySnapshot = await getDocs(collection(db, "transacoes"));
         const lista = [];
         querySnapshot.forEach((doc) => {
@@ -143,24 +142,30 @@ export default function App() {
         });
         setTransacoes(lista);
 
-        // Carregar Configurações (Salários e Categorias) da Nuvem
         const configDoc = await getDoc(doc(db, "configuracoes", "geral"));
         if (configDoc.exists()) {
           const dados = configDoc.data();
           if (dados.perfis) setPerfis(dados.perfis);
           if (dados.categorias && Array.isArray(dados.categorias)) {
             setCategorias(dados.categorias);
+            localStorage.setItem('nossobolso_categorias', JSON.stringify(dados.categorias));
           }
         }
       } catch (e) {
         console.error("Erro ao carregar do Firestore", e);
+        setStatusAviso({
+          tipo: 'erro',
+          mensagem: 'Não foi possível carregar os dados da nuvem. Usando dados locais salvos.'
+        });
       }
     }
     carregarDadosNuvem();
   }, [usuario]);
 
-  // Função para salvar configurações completas (Perfis e Categorias) na Nuvem
   const salvarConfiguracoesNaNuvem = async (novosPerfis, novasCategorias) => {
+    // Salva localmente primeiro para garantir segurança instantânea
+    localStorage.setItem('nossobolso_categorias', JSON.stringify(novasCategorias));
+    
     if (db && usuario) {
       try {
         await setDoc(doc(db, "configuracoes", "geral"), {
@@ -168,15 +173,24 @@ export default function App() {
           categorias: novasCategorias
         }, { merge: true });
         
-        setMensagemSucessoConfig('Alterações salvas e sincronizadas com sucesso!');
-        setTimeout(() => setMensagemSucessoConfig(''), 4000);
+        setStatusAviso({
+          tipo: 'sucesso',
+          mensagem: 'Alterações salvas e sincronizadas com sucesso!'
+        });
+        setTimeout(() => setStatusAviso({ tipo: '', mensagem: '' }), 4000);
       } catch (err) {
         console.error("Erro ao salvar na nuvem", err);
-        alert("Erro ao sincronizar com a nuvem. Verifique sua conexão.");
+        setStatusAviso({
+          tipo: 'erro',
+          mensagem: 'Ops! Falha ao sincronizar com a nuvem. Suas alterações foram salvas no aparelho.'
+        });
       }
     } else {
-      setMensagemSucessoConfig('Alterações salvas localmente!');
-      setTimeout(() => setMensagemSucessoConfig(''), 3000);
+      setStatusAviso({
+        tipo: 'sucesso',
+        mensagem: 'Alterações salvas no dispositivo com sucesso!'
+      });
+      setTimeout(() => setStatusAviso({ tipo: '', mensagem: '' }), 3000);
     }
   };
 
@@ -636,9 +650,25 @@ export default function App() {
 
         {abaAtiva === 'config' && (
           <div className="space-y-6">
-            {mensagemSucessoConfig && (
-              <div className="p-3 bg-emerald-500/20 border border-emerald-500 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4"/> {mensagemSucessoConfig}
+            {/* Aviso Intuitivo de Sucesso ou Erro Amigável */}
+            {statusAviso.mensagem && (
+              <div className={`p-4 rounded-xl border text-xs flex items-center justify-between shadow-md ${
+                statusAviso.tipo === 'sucesso' 
+                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-200' 
+                  : 'bg-amber-500/20 border-amber-500 text-amber-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {statusAviso.tipo === 'sucesso' ? <CheckCircle2 className="w-4 h-4 text-emerald-400"/> : <AlertCircle className="w-4 h-4 text-amber-400"/>}
+                  <span>{statusAviso.mensagem}</span>
+                </div>
+                {statusAviso.tipo === 'erro' && (
+                  <button 
+                    onClick={() => salvarConfiguracoesNaNuvem(perfis, categorias)}
+                    className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-all"
+                  >
+                    Tentar novamente
+                  </button>
+                )}
               </div>
             )}
 
@@ -842,7 +872,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}]{/* */}</span>
                       <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
                     </div>
                   </div>
