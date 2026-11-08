@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -31,9 +31,7 @@ const CATEGORIAS_PADRAO = [
   'Mercado & Casa (Salário)',
   'Mercado & Casa (VA)',
   'Contas da Casa (Luz/Água/Net)',
-  'Carro do Pequeno',
-  'Carro da Pequena',
-  'Carro (Uso Mútuo / Viagem)',
+  'Carro',
   'Gatos / Pets',
   'Alimentação / Delivery',
   'Vestuário & Cuidados',
@@ -80,6 +78,7 @@ export default function App() {
       const listaSalva = JSON.parse(salvo);
       if (!listaSalva.includes('Investimentos / Aportes')) listaSalva.push('Investimentos / Aportes');
       if (!listaSalva.includes('Renda Extra / Serviços (Aporte)')) listaSalva.push('Renda Extra / Serviços (Aporte)');
+      if (!listaSalva.includes('Carro')) listaSalva.push('Carro');
       return listaSalva;
     }
     return CATEGORIAS_PADRAO;
@@ -89,7 +88,7 @@ export default function App() {
   const [transacoes, setTransacoes] = useState([]);
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
-  const [modoVisualizacaoDashboard, setModoVisualizacaoDashboard] = useState('mes'); // 'mes' ou 'ano'
+  const [modoVisualizacaoDashboard, setModoVisualizacaoDashboard] = useState('mes');
   const [statusAviso, setStatusAviso] = useState({ tipo: '', mensagem: '' });
   const [editandoTransacao, setEditandoTransacao] = useState(null);
 
@@ -109,7 +108,7 @@ export default function App() {
     valor: '',
     categoria: CATEGORIAS_PADRAO[0],
     pagador: 'pequeno',
-    tipoDivisao: '50/50',
+    tipoDivisao: 'individual',
     meioPagamento: 'salario',
     parcelas: 1,
     eAutofinanciamento: false,
@@ -161,6 +160,7 @@ export default function App() {
             let catNuvem = dados.categorias;
             if (!catNuvem.includes('Investimentos / Aportes')) catNuvem.push('Investimentos / Aportes');
             if (!catNuvem.includes('Renda Extra / Serviços (Aporte)')) catNuvem.push('Renda Extra / Serviços (Aporte)');
+            if (!catNuvem.includes('Carro')) catNuvem.push('Carro');
             setCategorias(catNuvem);
             localStorage.setItem('nossobolso_categorias', JSON.stringify(catNuvem));
           }
@@ -239,7 +239,6 @@ export default function App() {
     });
   }, [transacoes, mesFiltro, filtroPessoa]);
 
-  // Filtro específico para o Dashboard no modo Anual
   const transacoesDoAno = useMemo(() => {
     return transacoes.filter(t => {
       const anoTransacao = t.mesCompetencia ? t.mesCompetencia.split('-')[0] : (t.data ? t.data.split('-')[0] : '');
@@ -274,12 +273,28 @@ export default function App() {
     let rendaExtraPequeno = 0;
     let rendaExtraPequena = 0;
     
+    let totalPagoPeloPequenoEm50_50 = 0;
+    let totalPagoPelaPequenaEm50_50 = 0;
+
     let gastosPorCategoria = {};
 
     transacoes.forEach(t => {
       if (t.categoria && t.categoria.includes('Férias / 13º') && t.eReceita) {
         if (filtroPessoa === 'todos' || t.pagador === filtroPessoa) {
           caixinhaViagens += Number(t.valor);
+        }
+      }
+    });
+
+    transacoesDoMes.forEach(t => {
+      if (t.eReceita) return;
+      const valor = Number(t.valor);
+      
+      if (t.tipoDivisao === '50/50') {
+        if (t.pagador === 'pequeno') {
+          totalPagoPeloPequenoEm50_50 += valor;
+        } else if (t.pagador === 'pequena') {
+          totalPagoPelaPequenaEm50_50 += valor;
         }
       }
     });
@@ -334,11 +349,14 @@ export default function App() {
     const metaPequeno = Number(parseMoedaInput(perfis.pequeno.metaInvestimento)) || 0;
     const metaPequena = Number(parseMoedaInput(perfis.pequena.metaInvestimento)) || 0;
 
-    // Se for modo ano, multiplicamos por 12 para estimar a base anual de salários e metas
     const fatorMultiplicador = modoVisualizacaoDashboard === 'ano' ? 12 : 1;
 
     const orcamentoLivrePequeno = (salarioPequeno * fatorMultiplicador) - (metaPequeno * fatorMultiplicador) - gastosPequenoSalario;
     const orcamentoLivrePequena = (salarioPequena * fatorMultiplicador) - (metaPequena * fatorMultiplicador) - gastosPequenaSalario;
+
+    const totalGasto5050Mes = totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50;
+    const parteIdealCadaUm = totalGasto5050Mes / 2;
+    const saldoLiquidoPequeno = totalPagoPeloPequenoEm50_50 - parteIdealCadaUm; 
 
     return {
       gastosSalarioTotais,
@@ -355,9 +373,13 @@ export default function App() {
       totalRendaExtraMes,
       rendaExtraPequeno,
       rendaExtraPequena,
-      gastosPorCategoria
+      gastosPorCategoria,
+      totalPagoPeloPequenoEm50_50,
+      totalPagoPelaPequenaEm50_50,
+      totalGasto5050Mes,
+      saldoLiquidoPequeno
     };
-  }, [transacoes, transacoesDashboardAtivas, perfis, filtroPessoa, modoVisualizacaoDashboard]);
+  }, [transacoes, transacoesDoMes, transacoesDashboardAtivas, perfis, filtroPessoa, modoVisualizacaoDashboard]);
 
   const handleSalvarTransacao = async (e) => {
     e.preventDefault();
@@ -464,7 +486,7 @@ export default function App() {
       valor: '',
       categoria: categoriasOrdenadas[0] || '',
       pagador: 'pequeno',
-      tipoDivisao: '50/50',
+      tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
       eAutofinanciamento: false,
@@ -482,7 +504,7 @@ export default function App() {
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       categoria: t.categoria,
       pagador: t.pagador || 'pequeno',
-      tipoDivisao: t.tipoDivisao || '50/50',
+      tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
       parcelas: t.parcelas || 1,
       eAutofinanciamento: t.eAutofinanciamento || false,
@@ -498,7 +520,7 @@ export default function App() {
       valor: '',
       categoria: categoriasOrdenadas[0] || '',
       pagador: 'pequeno',
-      tipoDivisao: '50/50',
+      tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
       eAutofinanciamento: false,
@@ -719,7 +741,6 @@ export default function App() {
 
         {abaAtiva === 'dashboard' && (
           <div className="space-y-6">
-            {/* Seletor de Modo de Visualização (Mês vs. Ano) */}
             <div className="flex items-center justify-between bg-slate-200 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-300 dark:border-slate-700">
               <div className="flex items-center gap-2 px-2">
                 <Calendar className="w-4 h-4 text-cyan-500"/>
@@ -746,6 +767,52 @@ export default function App() {
                 >
                   Visão Anual ({anoFiltro})
                 </button>
+              </div>
+            </div>
+
+            {/* Painel de Reembolso / Acerto de Contas 50/50 */}
+            <div className={`p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-3 border-l-4 border-l-cyan-500`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-cyan-100 text-cyan-600 rounded-xl">
+                    <ArrowRightLeft className="w-6 h-6"/>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm">Balanço de Acerto de Contas (Devolução 50/50)</h3>
+                    <p className="text-xs text-slate-400">Reembolsos calculados exclusivamente para os gastos marcados como 50/50.</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 block">Total Compartilhado ({mesFiltro})</span>
+                  <span className="text-sm font-bold">R$ {calculos.totalGasto5050Mes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-4 ${modoEscuro ? 'bg-slate-700/40 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="space-y-1">
+                  <span className="text-xs font-semibold text-slate-400 block">Resumo dos Pagamentos 50/50 no mês:</span>
+                  <p className="text-xs">• Pago pelo Pequeno: <strong>R$ {calculos.totalPagoPeloPequenoEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></p>
+                  <p className="text-xs">• Pago pela Pequena: <strong>R$ {calculos.totalPagoPelaPequenaEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></p>
+                </div>
+
+                <div className="text-right border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-6 border-slate-300 dark:border-slate-600 w-full md:w-auto">
+                  {calculos.saldoLiquidoPequeno > 0 ? (
+                    <div>
+                      <span className="text-[10px] font-semibold text-pink-500 block uppercase">Reembolso Devido</span>
+                      <span className="text-base font-bold text-pink-600">Pequena deve depositar R$ {calculos.saldoLiquidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ao Pequeno</span>
+                    </div>
+                  ) : calculos.saldoLiquidoPequeno < 0 ? (
+                    <div>
+                      <span className="text-[10px] font-semibold text-cyan-500 block uppercase">Reembolso Devido</span>
+                      <span className="text-base font-bold text-cyan-600">Pequeno deve depositar R$ {Math.abs(calculos.saldoLiquidoPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} à Pequena</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="text-[10px] font-semibold text-emerald-500 block uppercase">Contas Acertadas</span>
+                      <span className="text-sm font-bold text-emerald-600">Nenhum reembolso pendente neste mês!</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1071,7 +1138,7 @@ export default function App() {
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição (ex: Supermercado)"
+                  type="text" required placeholder="Descrição (ex: Manutenção Fiat Mobi)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
@@ -1113,7 +1180,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-slate-400 block mb-1">Pagador</label>
+                    <label className="text-xs text-slate-400 block mb-1">Quem Pagou?</label>
                     <select
                       value={form.pagador} onChange={(e) => setForm({...form, pagador: e.target.value})}
                       className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
@@ -1123,13 +1190,24 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 block mb-1">Parcelas</label>
-                    <input 
-                      type="number" min="1" max="48" disabled={editandoTransacao !== null}
-                      value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
-                      className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoTransacao !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                    />
+                    <label className="text-xs text-slate-400 block mb-1">Entra na Devolução?</label>
+                    <select
+                      value={form.tipoDivisao} onChange={(e) => setForm({...form, tipoDivisao: e.target.value})}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border font-semibold ${form.tipoDivisao === '50/50' ? 'border-amber-500 text-amber-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    >
+                      <option value="individual">Individual (100%)</option>
+                      <option value="50/50">Devolução / Reembolso (50/50)</option>
+                    </select>
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Parcelas</label>
+                  <input 
+                    type="number" min="1" max="48" disabled={editandoTransacao !== null}
+                    value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
+                    className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoTransacao !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                  />
                 </div>
 
                 <button type="submit" className={`w-full font-semibold py-2.5 rounded-lg text-sm shadow-md transition-colors text-white ${editandoTransacao ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
@@ -1151,6 +1229,11 @@ export default function App() {
                           {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
+                        {t.tipoDivisao === '50/50' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30">
+                            Devolução 50/50
+                          </span>
+                        )}
                         <span className="font-semibold text-sm">{t.descricao}</span>
                       </div>
                     </div>
