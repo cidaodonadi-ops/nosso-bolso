@@ -72,7 +72,6 @@ export default function App() {
     pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
 
-  // Carrega categorias salvas no localStorage ou usa o padrão
   const [categorias, setCategorias] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_categorias');
     if (salvo) {
@@ -85,7 +84,16 @@ export default function App() {
   const [transacoes, setTransacoes] = useState([]);
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
-  const [modoEscuro, setModoEscuro] = useState(false);
+
+  // Inicialização inteligente do tema (preferência salva ou do sistema do dispositivo)
+  const [modoEscuro, setModoEscuro] = useState(() => {
+    const temaSalvo = localStorage.getItem('nossobolso_tema');
+    if (temaSalvo !== null) {
+      return temaSalvo === 'escuro';
+    }
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
   const [mesFiltro, setMesFiltro] = useState('2026-11');
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
@@ -103,12 +111,19 @@ export default function App() {
     mesCompetencia: '2026-11'
   });
 
-  // Salva categorias no localStorage sempre que houver alteração
+  // Salva alteração de tema no localStorage
+  const alternarTema = () => {
+    setModoEscuro(prev => {
+      const novoModo = !prev;
+      localStorage.setItem('nossobolso_tema', novoModo ? 'escuro' : 'claro');
+      return novoModo;
+    });
+  };
+
   useEffect(() => {
     localStorage.setItem('nossobolso_categorias', JSON.stringify(categorias));
   }, [categorias]);
 
-  // Categorias sempre ordenadas alfabeticamente
   const categoriasOrdenadas = useMemo(() => {
     return [...categorias].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
   }, [categorias]);
@@ -430,7 +445,7 @@ export default function App() {
             type="month" value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)}
             className={`text-sm px-3 py-1.5 rounded-lg border font-medium ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
           />
-          <button onClick={() => setModoEscuro(!modoEscuro)} className={`p-2 rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-yellow-400' : 'bg-slate-100 border-slate-300 text-slate-600'}`}>
+          <button onClick={alternarTema} className={`p-2 rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-yellow-400' : 'bg-slate-100 border-slate-300 text-slate-600'}`} title={modoEscuro ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}>
             {modoEscuro ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <button onClick={handleLogout} className="p-2 rounded-lg border bg-rose-500/10 text-rose-500 border-rose-500/30 hover:bg-rose-500/20" title="Sair">
