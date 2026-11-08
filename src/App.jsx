@@ -126,6 +126,7 @@ export default function App() {
       if (!listaSalva.includes('Investimentos / Aportes')) listaSalva.push('Investimentos / Aportes');
       if (!listaSalva.includes('Renda Extra / Serviços (Aporte)')) listaSalva.push('Renda Extra / Serviços (Aporte)');
       if (!listaSalva.includes('Carro')) listaSalva.push('Carro');
+      if (!listaSalva.includes('Autofinanciamento (Devolução)')) listaSalva.push('Autofinanciamento (Devolução)');
       return listaSalva;
     }
     return CATEGORIAS_PADRAO;
@@ -225,6 +226,7 @@ export default function App() {
             if (!catNuvem.includes('Investimentos / Aportes')) catNuvem.push('Investimentos / Aportes');
             if (!catNuvem.includes('Renda Extra / Serviços (Aporte)')) catNuvem.push('Renda Extra / Serviços (Aporte)');
             if (!catNuvem.includes('Carro')) catNuvem.push('Carro');
+            if (!catNuvem.includes('Autofinanciamento (Devolução)')) catNuvem.push('Autofinanciamento (Devolução)');
             setCategorias(catNuvem);
             localStorage.setItem('nossobolso_categorias', JSON.stringify(catNuvem));
           }
@@ -379,14 +381,6 @@ export default function App() {
 
   const transacoesDashboardAtivas = modoVisualizacaoDashboard === 'mes' ? transacoesDoMes : transacoesDoAno;
 
-  const autofinanciamentos = useMemo(() => {
-    return transacoes.filter(t => {
-      if (!t.eAutofinanciamento) return false;
-      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa) return false;
-      return true;
-    });
-  }, [transacoes, filtroPessoa]);
-
   const calculos = useMemo(() => {
     let gastosPequenoSalario = 0;
     let gastosPequenaSalario = 0;
@@ -432,7 +426,7 @@ export default function App() {
       const valorOriginal = arredondar2(t.valor);
       const cat = t.categoria || 'Outros';
 
-      if (t.eAutofinanciamento) {
+      if (t.eAutofinanciamento || cat.includes('Autofinanciamento')) {
         totalAutofinanciamentoMes += valorOriginal;
       }
 
@@ -600,19 +594,20 @@ export default function App() {
         let strMes = String(dataParcela.getMonth() + 1).padStart(2, '0');
         let competenciaParcela = `${strAno}-${strMes}`;
         
+        const isAutofin = form.categoria === 'Autofinanciamento (Devolução)';
         const novaT = {
           data: `${strAno}-${strMes}-05`,
           mesCompetencia: competenciaParcela,
           descricao: numParcelas > 1 ? `${form.descricao} (${i + 1}/${numParcelas})` : form.descricao,
           valor: valorParcela,
-          categoria: form.eAutofinanciamento ? 'Autofinanciamento (Devolução)' : form.categoria,
+          categoria: form.categoria,
           pagador: form.pagador,
           tipoDivisao: form.tipoDivisao,
           meioPagamento: form.meioPagamento,
           parcelas: numParcelas,
           parcelaAtual: i + 1,
-          grupoId: numParcelas > 1 || form.eAutofinanciamento ? grupoId : null,
-          eAutofinanciamento: form.eAutofinanciamento,
+          grupoId: numParcelas > 1 || isAutofin ? grupoId : null,
+          eAutofinanciamento: isAutofin,
           eReceita: form.eReceita
         };
 
@@ -682,16 +677,46 @@ export default function App() {
     });
   };
 
-  const removerTransacao = async (id) => {
-    if (db && usuario) {
-      try {
-        await deleteDoc(doc(db, "transacoes", id));
-      } catch (err) {
-        console.error("Erro ao deletar", err);
-      }
+  // Função de exclusão com confirmação para parcelamentos e próximas parcelas
+  const removerTransacao = async (tAlvo) => {
+    let excluirProximos = false;
+    if (tAlvo.grupoId || (tAlvo.parcelas && tAlvo.parcelas > 1)) {
+      excluirProximos = window.confirm(
+        "Deseja excluir apenas esta parcela ou OK para excluir ESTA e TODAS as PRÓXIMAS parcelas deste grupo?"
+      );
+    } else {
+      if (!window.confirm("Deseja realmente excluir este lançamento?")) return;
     }
-    setTransacoes(prev => prev.filter(t => t.id !== id));
-    if (editandoTransacao?.id === id) cancelarEdicao();
+
+    if (excluirProximos && tAlvo.grupoId) {
+      const idGrupo = tAlvo.grupoId;
+      const parcelaRef = tAlvo.parcelaAtual || 1;
+
+      const transacoesParaExcluir = transacoes.filter(t => t.grupoId === idGrupo && (t.parcelaAtual >= parcelaRef || !t.parcelaAtual));
+
+      for (const tDel of transacoesParaExcluir) {
+        if (db && usuario) {
+          try {
+            await deleteDoc(doc(db, "transacoes", tDel.id));
+          } catch (err) {
+            console.error("Erro ao deletar da nuvem", err);
+          }
+        }
+      }
+
+      setTransacoes(prev => prev.filter(t => !(t.grupoId === idGrupo && (t.parcelaAtual >= parcelaRef || !t.parcelaAtual))));
+    } else {
+      if (db && usuario) {
+        try {
+          await deleteDoc(doc(db, "transacoes", tAlvo.id));
+        } catch (err) {
+          console.error("Erro ao deletar", err);
+        }
+      }
+      setTransacoes(prev => prev.filter(t => t.id !== tAlvo.id));
+    }
+
+    if (editandoTransacao?.id === tAlvo.id) cancelarEdicao();
   };
 
   const adicionarCategoria = (e) => {
@@ -927,7 +952,6 @@ export default function App() {
         <nav className="flex gap-1.5 sm:gap-2 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto pb-2 scrollbar-none">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: Wallet },
-            { id: 'autofinanciamento', label: 'Autofinanciamento', icon: RefreshCw },
             { id: 'lancamentos', label: 'Lançamentos', icon: PlusCircle },
             { id: 'viagens', label: 'Caixinha Viagem', icon: Plane },
             { id: 'config', label: 'Configurações', icon: Settings }
@@ -1120,43 +1144,6 @@ export default function App() {
                       );
                     })}
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {abaAtiva === 'autofinanciamento' && (
-          <div className="space-y-6">
-            <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md`}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl shrink-0">
-                  <RefreshCw className="w-6 h-6"/>
-                </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold">Painel de Autofinanciamento</h2>
-                  <p className="text-xs text-slate-400">Compras pagas à vista com a reserva e devolvidas em parcelas.</p>
-                </div>
-              </div>
-
-              {autofinanciamentos.length === 0 ? (
-                <p className="text-center text-xs text-slate-400 py-6">Nenhum autofinanciamento registrado.</p>
-              ) : (
-                <div className="space-y-3 mt-4">
-                  {autofinanciamentos.map(t => (
-                    <div key={t.id} className="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 flex justify-between items-center">
-                      <div>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-600 text-white mr-2">
-                          {t.parcelaAtual}/{t.parcelas}x
-                        </span>
-                        <span className="font-semibold text-xs sm:text-sm">{t.descricao}</span>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Competência: {t.mesCompetencia}</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-indigo-600 block">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mês</span>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>
@@ -1468,7 +1455,7 @@ export default function App() {
                           <button onClick={() => iniciarEdicaoTransacao(t)} className="text-slate-400 hover:text-amber-500 p-1">
                             <Edit3 className="w-4 h-4"/>
                           </button>
-                          <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500 p-1">
+                          <button onClick={() => removerTransacao(t)} className="text-slate-400 hover:text-rose-500 p-1">
                             <Trash2 className="w-4 h-4"/>
                           </button>
                         </div>
