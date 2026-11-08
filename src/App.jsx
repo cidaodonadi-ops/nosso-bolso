@@ -6,7 +6,7 @@ import {
 
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDeo0qlg76LOaUGMbqVwNZqLRURc1Qie5o",
@@ -72,20 +72,12 @@ export default function App() {
     pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
 
-  const [categorias, setCategorias] = useState(() => {
-    const salvo = localStorage.getItem('nossobolso_categorias');
-    if (salvo) {
-      try { return JSON.parse(salvo); } catch (e) { return CATEGORIAS_PADRAO; }
-    }
-    return CATEGORIAS_PADRAO;
-  });
-
+  const [categorias, setCategorias] = useState(CATEGORIAS_PADRAO);
   const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
   const [transacoes, setTransacoes] = useState([]);
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
 
-  // Inicialização inteligente do tema (preferência salva ou do sistema do dispositivo)
   const [modoEscuro, setModoEscuro] = useState(() => {
     const temaSalvo = localStorage.getItem('nossobolso_tema');
     if (temaSalvo !== null) {
@@ -111,7 +103,6 @@ export default function App() {
     mesCompetencia: '2026-11'
   });
 
-  // Salva alteração de tema no localStorage
   const alternarTema = () => {
     setModoEscuro(prev => {
       const novoModo = !prev;
@@ -120,14 +111,11 @@ export default function App() {
     });
   };
 
-  useEffect(() => {
-    localStorage.setItem('nossobolso_categorias', JSON.stringify(categorias));
-  }, [categorias]);
-
   const categoriasOrdenadas = useMemo(() => {
     return [...categorias].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
   }, [categorias]);
 
+  // Autenticação Firebase
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -136,6 +124,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Carregamento de Dados da Nuvem (Transações + Configurações)
   useEffect(() => {
     if (!usuario || !db) {
       const saved = localStorage.getItem('nossobolso_transacoes');
@@ -145,18 +134,59 @@ export default function App() {
 
     async function carregarDadosNuvem() {
       try {
+        // Carregar Transações
         const querySnapshot = await getDocs(collection(db, "transacoes"));
         const lista = [];
         querySnapshot.forEach((doc) => {
           lista.push({ id: doc.id, ...doc.data() });
         });
         setTransacoes(lista);
+
+        // Carregar Configurações (Salários e Categorias) da Nuvem
+        const configDoc = await getDoc(doc(db, "configuracoes", "geral"));
+        if (configDoc.exists()) {
+          const dados = configDoc.data();
+          if (dados.perfis) setPerfis(dados.perfis);
+          if (dados.categorias && Array.isArray(dados.categorias)) {
+            setCategorias(dados.categorias);
+          }
+        }
       } catch (e) {
         console.error("Erro ao carregar do Firestore", e);
       }
     }
     carregarDadosNuvem();
   }, [usuario]);
+
+  // Função para salvar alterações de Perfis na Nuvem
+  const atualizarPerfilNaNuvem = async (novosPerfis) => {
+    setPerfis(novosPerfis);
+    if (db && usuario) {
+      try {
+        await setDoc(doc(db, "configuracoes", "geral"), {
+          perfis: novosPerfis,
+          categorias: categorias
+        }, { merge: true });
+      } catch (err) {
+        console.error("Erro ao salvar perfis na nuvem", err);
+      }
+    }
+  };
+
+  // Função para salvar alterações de Categorias na Nuvem
+  const atualizarCategoriasNaNuvem = async (novasCategorias) => {
+    setCategorias(novasCategorias);
+    if (db && usuario) {
+      try {
+        await setDoc(doc(db, "configuracoes", "geral"), {
+          perfis: perfis,
+          categorias: novasCategorias
+        }, { merge: true });
+      } catch (err) {
+        console.error("Erro ao salvar categorias na nuvem", err);
+      }
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -335,13 +365,15 @@ export default function App() {
     if (!novaCategoriaInput.trim()) return;
     const nomeFormatado = novaCategoriaInput.trim();
     if (!categorias.includes(nomeFormatado)) {
-      setCategorias([...categorias, nomeFormatado]);
+      const novas = [...categorias, nomeFormatado];
+      atualizarCategoriasNaNuvem(novas);
     }
     setNovaCategoriaInput('');
   };
 
   const removerCategoria = (catRemover) => {
-    setCategorias(categorias.filter(c => c !== catRemover));
+    const novas = categorias.filter(c => c !== catRemover);
+    atualizarCategoriasNaNuvem(novas);
   };
 
   const iniciarReconhecimentoVoz = () => {
@@ -612,7 +644,7 @@ export default function App() {
           <div className="space-y-6">
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <h2 className="text-lg font-bold flex items-center gap-2">
-                <Settings className="w-5 h-5 text-blue-500"/> Parâmetros de Salários e VA
+                <Settings className="w-5 h-5 text-blue-500"/> Parâmetros de Salários e VA (Sincronizado na Nuvem)
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {['pequeno', 'pequena'].map((perfilKey) => {
@@ -626,7 +658,11 @@ export default function App() {
                           type="text" value={p.salario}
                           onChange={(e) => {
                             const val = formatarMoedaInput(e.target.value);
-                            setPerfis({...perfis, [perfilKey]: {...p, salario: val}});
+                            const novosPerfis = {
+                              ...perfis,
+                              [perfilKey]: { ...p, salario: val }
+                            };
+                            atualizarPerfilNaNuvem(novosPerfis);
                           }}
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
@@ -637,7 +673,11 @@ export default function App() {
                           type="text" value={p.va}
                           onChange={(e) => {
                             const val = formatarMoedaInput(e.target.value);
-                            setPerfis({...perfis, [perfilKey]: {...p, va: val}});
+                            const novosPerfis = {
+                              ...perfis,
+                              [perfilKey]: { ...p, va: val }
+                            };
+                            atualizarPerfilNaNuvem(novosPerfis);
                           }}
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
@@ -648,7 +688,11 @@ export default function App() {
                           type="text" value={p.metaInvestimento}
                           onChange={(e) => {
                             const val = formatarMoedaInput(e.target.value);
-                            setPerfis({...perfis, [perfilKey]: {...p, metaInvestimento: val}});
+                            const novosPerfis = {
+                              ...perfis,
+                              [perfilKey]: { ...p, metaInvestimento: val }
+                            };
+                            atualizarPerfilNaNuvem(novosPerfis);
                           }}
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
@@ -660,8 +704,8 @@ export default function App() {
             </div>
 
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
-              <h2 className="text-lg font-bold">Classes / Categorias de Gastos (Ordem Alfabética)</h2>
-              <p className="text-xs text-slate-400">As alterações realizadas aqui ficam salvas automaticamente no dispositivo.</p>
+              <h2 className="text-lg font-bold">Classes / Categorias de Gastos (Sincronizado na Nuvem)</h2>
+              <p className="text-xs text-slate-400">Qualquer alteração feita aqui atualiza instantaneamente no dispositivo do outro.</p>
               
               <form onSubmit={adicionarCategoria} className="flex gap-2">
                 <input 
