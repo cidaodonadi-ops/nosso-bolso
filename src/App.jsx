@@ -102,7 +102,7 @@ export default function App() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  const [mesFiltro, setMesFiltro] = useState('2026-12');
+  const [mesFiltro, setMesFiltro] = useState('2026-11');
   const [anoFiltro, setAnoFiltro] = useState('2026');
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
@@ -126,7 +126,7 @@ export default function App() {
     parcelas: 1,
     eAutofinanciamento: false,
     eReceita: false,
-    mesCompetencia: '2026-12'
+    mesCompetencia: '2026-11'
   });
 
   useEffect(() => {
@@ -249,25 +249,31 @@ export default function App() {
     setUsuario(null);
   };
 
-  // Filtro rigoroso por mês de competência (garante que apenas as parcelas daquele mês apareçam)
+  // Filtro estrito para o mês ativo (garante que apenas transações do mesFiltro apareçam)
   const transacoesDoMes = useMemo(() => {
     return transacoes.filter(t => {
       const matchMes = t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro));
       if (!matchMes) return false;
-      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa) return false;
       if (filtroCategoriaLancamentos !== 'todas' && t.categoria !== filtroCategoriaLancamentos) return false;
       return true;
     });
-  }, [transacoes, mesFiltro, filtroPessoa, filtroCategoriaLancamentos]);
+  }, [transacoes, mesFiltro, filtroCategoriaLancamentos]);
+
+  // Transações do mês filtradas também por pessoa (para exibição e cálculos de gastos individuais)
+  const transacoesDoMesFiltradasPorPessoa = useMemo(() => {
+    return transacoesDoMes.filter(t => {
+      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') return false;
+      return true;
+    });
+  }, [transacoesDoMes, filtroPessoa]);
 
   const transacoesDoAno = useMemo(() => {
     return transacoes.filter(t => {
       const anoTransacao = t.mesCompetencia ? t.mesCompetencia.split('-')[0] : (t.data ? t.data.split('-')[0] : '');
       if (anoTransacao !== anoFiltro) return false;
-      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa) return false;
       return true;
     });
-  }, [transacoes, anoFiltro, filtroPessoa]);
+  }, [transacoes, anoFiltro]);
 
   const transacoesDashboardAtivas = modoVisualizacaoDashboard === 'mes' ? transacoesDoMes : transacoesDoAno;
 
@@ -340,7 +346,7 @@ export default function App() {
         if (t.pagador === 'pequena') rendaExtraPequena += valorOriginal;
       }
 
-      // Divisão 50/50 exata: 50% do valor para cada um
+      // Divisão exata 50/50: 50% para cada um no orçamento pessoal
       let pesoNoOrcamentoPequeno = 0;
       let pesoNoOrcamentoPequena = 0;
 
@@ -524,7 +530,7 @@ export default function App() {
       setTransacoes(prev => [...novasTransacoes, ...prev]);
     }
 
-    // Reset rigoroso do formulário para o padrão inicial
+    // Reset rigoroso do formulário
     setForm({
       descricao: '',
       valor: '',
@@ -1302,41 +1308,53 @@ export default function App() {
 
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm text-slate-500">Lançamentos de Competência: {mesFiltro}</h3>
-                <span className="text-xs font-semibold text-slate-400">Total filtrado: {transacoesDoMes.length} item(ns)</span>
+                <span className="text-xs font-semibold text-slate-400">Total filtrado: {transacoesDoMesFiltradasPorPessoa.length} item(ns)</span>
               </div>
 
-              {transacoesDoMes.length === 0 ? (
+              {transacoesDoMesFiltradasPorPessoa.length === 0 ? (
                 <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum lançamento encontrado para este mês com o filtro selecionado.</p>
               ) : (
-                transacoesDoMes.map(t => (
-                  <div key={t.id} className={`p-3 rounded-xl border ${editandoTransacao?.id === t.id ? 'border-amber-500 bg-amber-500/10' : t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
-                          {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
-                        {t.tipoDivisao === '50/50' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30">
-                            Devolução 50/50
+                transacoesDoMesFiltradasPorPessoa.map(t => {
+                  // Se for 50/50 e estiver visualizando individualmente, exibe a metade correspondente para refletir o orçamento real
+                  const valorExibido = (t.tipoDivisao === '50/50' && filtroPessoa !== 'todos') 
+                    ? arredondar2(t.valor / 2) 
+                    : t.valor;
+
+                  return (
+                    <div key={t.id} className={`p-3 rounded-xl border ${editandoTransacao?.id === t.id ? 'border-amber-500 bg-amber-500/10' : t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
+                            {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
                           </span>
-                        )}
-                        <span className="font-semibold text-sm">{t.descricao}</span>
+                          <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
+                          {t.tipoDivisao === '50/50' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30">
+                              Devolução 50/50 {filtroPessoa !== 'todos' ? '(Sua parte: 50%)' : ''}
+                            </span>
+                          )}
+                          <span className="font-semibold text-sm">{t.descricao}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <span className="font-bold text-sm">R$ {Number(valorExibido).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          {t.tipoDivisao === '50/50' && filtroPessoa !== 'todos' && (
+                            <span className="text-[10px] text-slate-400 block">Total: R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => iniciarEdicaoTransacao(t)} className="text-slate-400 hover:text-amber-500 p-1" title="Editar lançamento">
+                            <Edit3 className="w-4 h-4"/>
+                          </button>
+                          <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500 p-1" title="Excluir lançamento">
+                            <Trash2 className="w-4 h-4"/>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => iniciarEdicaoTransacao(t)} className="text-slate-400 hover:text-amber-500 p-1" title="Editar lançamento">
-                          <Edit3 className="w-4 h-4"/>
-                        </button>
-                        <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500 p-1" title="Excluir lançamento">
-                          <Trash2 className="w-4 h-4"/>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
