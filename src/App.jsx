@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -105,6 +105,7 @@ export default function App() {
   const [mesFiltro, setMesFiltro] = useState('2026-12');
   const [anoFiltro, setAnoFiltro] = useState('2026');
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
+  const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
   const pagadorSugerido = useMemo(() => {
@@ -117,10 +118,10 @@ export default function App() {
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
-    modoValor: 'fixo', // Padrão agora é 'fixo' para facilitar previsões como Luz, Água, Aluguel
+    modoValor: 'fixo',
     categoria: CATEGORIAS_PADRAO[0],
-    pagador: 'pequeno',
-    tipoDivisao: '50/50', // Padrão inteligente 50/50 para contas da casa
+    pagador: pagadorSugerido,
+    tipoDivisao: '50/50',
     meioPagamento: 'salario',
     parcelas: 1,
     eAutofinanciamento: false,
@@ -248,14 +249,16 @@ export default function App() {
     setUsuario(null);
   };
 
+  // Filtro rigoroso por mês de competência (garante que apenas as parcelas daquele mês apareçam)
   const transacoesDoMes = useMemo(() => {
     return transacoes.filter(t => {
       const matchMes = t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro));
       if (!matchMes) return false;
       if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa) return false;
+      if (filtroCategoriaLancamentos !== 'todas' && t.categoria !== filtroCategoriaLancamentos) return false;
       return true;
     });
-  }, [transacoes, mesFiltro, filtroPessoa]);
+  }, [transacoes, mesFiltro, filtroPessoa, filtroCategoriaLancamentos]);
 
   const transacoesDoAno = useMemo(() => {
     return transacoes.filter(t => {
@@ -337,7 +340,7 @@ export default function App() {
         if (t.pagador === 'pequena') rendaExtraPequena += valorOriginal;
       }
 
-      // Cálculo rigoroso do peso de cada gasto no orçamento pessoal de cada um
+      // Divisão 50/50 exata: 50% do valor para cada um
       let pesoNoOrcamentoPequeno = 0;
       let pesoNoOrcamentoPequena = 0;
 
@@ -349,14 +352,12 @@ export default function App() {
         if (t.pagador === 'pequena') pesoNoOrcamentoPequena = valorOriginal;
       }
 
-      // Se o filtro de pessoa for individual, considera apenas a parte daquela pessoa no orçamento
       let valorParaGraficoEstatisticas = 0;
       if (filtroPessoa === 'pequeno') {
         valorParaGraficoEstatisticas = pesoNoOrcamentoPequeno;
       } else if (filtroPessoa === 'pequena') {
         valorParaGraficoEstatisticas = pesoNoOrcamentoPequena;
       } else {
-        // Visão Casal: soma a parte de ambos para o total geral de gastos da casa
         valorParaGraficoEstatisticas = arredondar2(pesoNoOrcamentoPequeno + pesoNoOrcamentoPequena);
       }
 
@@ -389,7 +390,6 @@ export default function App() {
     const orcamentoLivrePequeno = arredondar2((salarioPequeno * fatorMultiplicador) - (metaPequeno * fatorMultiplicador) - gastosPequenoSalario);
     const orcamentoLivrePequena = arredondar2((salarioPequena * fatorMultiplicador) - (metaPequena * fatorMultiplicador) - gastosPequenaSalario);
 
-    // Gastos totais exibidos no dashboard respeitam o filtro ativo (Casal, Pequeno ou Pequena)
     let gastosSalarioTotais = 0;
     if (filtroPessoa === 'pequeno') gastosSalarioTotais = gastosPequenoSalario;
     else if (filtroPessoa === 'pequena') gastosSalarioTotais = gastosPequenaSalario;
@@ -479,8 +479,6 @@ export default function App() {
       setEditandoTransacao(null);
     } else {
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
-      
-      // Se for modo 'fixo', o valor digitado é exatamente o valor de cada mês. Se for 'dividir', divide o total pelas parcelas.
       const valorParcela = form.modoValor === 'fixo' 
         ? valorNumerico 
         : arredondar2(valorNumerico / numParcelas);
@@ -526,6 +524,7 @@ export default function App() {
       setTransacoes(prev => [...novasTransacoes, ...prev]);
     }
 
+    // Reset rigoroso do formulário para o padrão inicial
     setForm({
       descricao: '',
       valor: '',
@@ -1187,7 +1186,7 @@ export default function App() {
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição (ex: Energia CPFL ou Aluguel)"
+                  type="text" required placeholder="Descrição (ex: Aluguel, Mercado...)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
@@ -1282,15 +1281,37 @@ export default function App() {
               </form>
             </div>
 
-            <div className="md:col-span-2 space-y-3">
-              <h3 className="font-bold text-sm text-slate-500">Lançamentos de Competência: {mesFiltro}</h3>
+            <div className="md:col-span-2 space-y-4">
+              {/* Barra de Filtros de Categoria para os Lançamentos do Mês */}
+              <div className={`p-3 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Filter className="w-4 h-4 text-cyan-500 shrink-0"/>
+                  <span className="text-xs font-bold text-slate-500">Filtrar Categoria:</span>
+                </div>
+                <select
+                  value={filtroCategoriaLancamentos}
+                  onChange={(e) => setFiltroCategoriaLancamentos(e.target.value)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border font-semibold w-full sm:w-64 ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}
+                >
+                  <option value="todas">Todas as Categorias</option>
+                  {categoriasOrdenadas.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-slate-500">Lançamentos de Competência: {mesFiltro}</h3>
+                <span className="text-xs font-semibold text-slate-400">Total filtrado: {transacoesDoMes.length} item(ns)</span>
+              </div>
+
               {transacoesDoMes.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-4">Nenhum lançamento para este mês com o filtro selecionado.</p>
+                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum lançamento encontrado para este mês com o filtro selecionado.</p>
               ) : (
                 transacoesDoMes.map(t => (
                   <div key={t.id} className={`p-3 rounded-xl border ${editandoTransacao?.id === t.id ? 'border-amber-500 bg-amber-500/10' : t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
                           {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
                         </span>
