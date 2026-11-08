@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -77,6 +77,7 @@ export default function App() {
   const [transacoes, setTransacoes] = useState([]);
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
+  const [mensagemSucessoConfig, setMensagemSucessoConfig] = useState('');
 
   const [modoEscuro, setModoEscuro] = useState(() => {
     const temaSalvo = localStorage.getItem('nossobolso_tema');
@@ -158,33 +159,24 @@ export default function App() {
     carregarDadosNuvem();
   }, [usuario]);
 
-  // Função para salvar alterações de Perfis na Nuvem
-  const atualizarPerfilNaNuvem = async (novosPerfis) => {
-    setPerfis(novosPerfis);
+  // Função para salvar configurações completas (Perfis e Categorias) na Nuvem
+  const salvarConfiguracoesNaNuvem = async (novosPerfis, novasCategorias) => {
     if (db && usuario) {
       try {
         await setDoc(doc(db, "configuracoes", "geral"), {
           perfis: novosPerfis,
-          categorias: categorias
-        }, { merge: true });
-      } catch (err) {
-        console.error("Erro ao salvar perfis na nuvem", err);
-      }
-    }
-  };
-
-  // Função para salvar alterações de Categorias na Nuvem
-  const atualizarCategoriasNaNuvem = async (novasCategorias) => {
-    setCategorias(novasCategorias);
-    if (db && usuario) {
-      try {
-        await setDoc(doc(db, "configuracoes", "geral"), {
-          perfis: perfis,
           categorias: novasCategorias
         }, { merge: true });
+        
+        setMensagemSucessoConfig('Alterações salvas e sincronizadas com sucesso!');
+        setTimeout(() => setMensagemSucessoConfig(''), 4000);
       } catch (err) {
-        console.error("Erro ao salvar categorias na nuvem", err);
+        console.error("Erro ao salvar na nuvem", err);
+        alert("Erro ao sincronizar com a nuvem. Verifique sua conexão.");
       }
+    } else {
+      setMensagemSucessoConfig('Alterações salvas localmente!');
+      setTimeout(() => setMensagemSucessoConfig(''), 3000);
     }
   };
 
@@ -366,14 +358,16 @@ export default function App() {
     const nomeFormatado = novaCategoriaInput.trim();
     if (!categorias.includes(nomeFormatado)) {
       const novas = [...categorias, nomeFormatado];
-      atualizarCategoriasNaNuvem(novas);
+      setCategorias(novas);
+      salvarConfiguracoesNaNuvem(perfis, novas);
     }
     setNovaCategoriaInput('');
   };
 
   const removerCategoria = (catRemover) => {
     const novas = categorias.filter(c => c !== catRemover);
-    atualizarCategoriasNaNuvem(novas);
+    setCategorias(novas);
+    salvarConfiguracoesNaNuvem(perfis, novas);
   };
 
   const iniciarReconhecimentoVoz = () => {
@@ -642,10 +636,25 @@ export default function App() {
 
         {abaAtiva === 'config' && (
           <div className="space-y-6">
+            {mensagemSucessoConfig && (
+              <div className="p-3 bg-emerald-500/20 border border-emerald-500 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4"/> {mensagemSucessoConfig}
+              </div>
+            )}
+
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <Settings className="w-5 h-5 text-blue-500"/> Parâmetros de Salários e VA (Sincronizado na Nuvem)
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-blue-500"/> Parâmetros de Salários e VA
+                </h2>
+                <button 
+                  onClick={() => salvarConfiguracoesNaNuvem(perfis, categorias)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm shadow-md transition-all flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4"/> Salvar Parâmetros
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {['pequeno', 'pequena'].map((perfilKey) => {
                   const p = perfis[perfilKey];
@@ -658,11 +667,10 @@ export default function App() {
                           type="text" value={p.salario}
                           onChange={(e) => {
                             const val = formatarMoedaInput(e.target.value);
-                            const novosPerfis = {
+                            setPerfis({
                               ...perfis,
                               [perfilKey]: { ...p, salario: val }
-                            };
-                            atualizarPerfilNaNuvem(novosPerfis);
+                            });
                           }}
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
@@ -673,11 +681,10 @@ export default function App() {
                           type="text" value={p.va}
                           onChange={(e) => {
                             const val = formatarMoedaInput(e.target.value);
-                            const novosPerfis = {
+                            setPerfis({
                               ...perfis,
                               [perfilKey]: { ...p, va: val }
-                            };
-                            atualizarPerfilNaNuvem(novosPerfis);
+                            });
                           }}
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
@@ -688,11 +695,10 @@ export default function App() {
                           type="text" value={p.metaInvestimento}
                           onChange={(e) => {
                             const val = formatarMoedaInput(e.target.value);
-                            const novosPerfis = {
+                            setPerfis({
                               ...perfis,
                               [perfilKey]: { ...p, metaInvestimento: val }
-                            };
-                            atualizarPerfilNaNuvem(novosPerfis);
+                            });
                           }}
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
@@ -704,8 +710,8 @@ export default function App() {
             </div>
 
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
-              <h2 className="text-lg font-bold">Classes / Categorias de Gastos (Sincronizado na Nuvem)</h2>
-              <p className="text-xs text-slate-400">Qualquer alteração feita aqui atualiza instantaneamente no dispositivo do outro.</p>
+              <h2 className="text-lg font-bold">Classes / Categorias de Gastos (Ordem Alfabética)</h2>
+              <p className="text-xs text-slate-400">Adicionar ou remover categorias atualiza e sincroniza instantaneamente na nuvem.</p>
               
               <form onSubmit={adicionarCategoria} className="flex gap-2">
                 <input 
@@ -722,7 +728,7 @@ export default function App() {
                 {categoriasOrdenadas.map(cat => (
                   <div key={cat} className={`flex justify-between items-center p-2.5 rounded-lg border ${modoEscuro ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                     <span className="text-sm font-medium">{cat}</span>
-                    <button onClick={() => removerCategoria(cat)} className="text-slate-400 hover:text-rose-500 p-1">
+                    <button onClick={() => removerCategoria(cat)} className="text-slate-400 hover:text-rose-500 p-1" title="Excluir categoria">
                       <Trash2 className="w-4 h-4"/>
                     </button>
                   </div>
