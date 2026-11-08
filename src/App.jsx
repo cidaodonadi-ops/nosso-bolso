@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils, Edit3, X
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDeo0qlg76LOaUGMbqVwNZqLRURc1Qie5o",
@@ -82,6 +82,7 @@ export default function App() {
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [statusAviso, setStatusAviso] = useState({ tipo: '', mensagem: '' });
+  const [editandoId, setEditandoId] = useState(null);
 
   const [modoEscuro, setModoEscuro] = useState(() => {
     const temaSalvo = localStorage.getItem('nossobolso_tema');
@@ -261,7 +262,6 @@ export default function App() {
 
       gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + valor;
 
-      // Soma consolidada de alimentação (Mercado Salário, Mercado VA e Alimentação/Delivery)
       if (
         cat.toLowerCase().includes('mercado') || 
         cat.toLowerCase().includes('alimentação') || 
@@ -305,53 +305,111 @@ export default function App() {
     };
   }, [transacoes, transacoesDoMes, perfis, filtroPessoa]);
 
-  const handleAdicionarTransacao = async (e) => {
+  const handleSalvarTransacao = async (e) => {
     e.preventDefault();
     const valorNumerico = parseFloat(parseMoedaInput(form.valor));
     if (!form.descricao || isNaN(valorNumerico)) return;
 
-    const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
-    const valorParcela = valorNumerico / numParcelas;
-
-    const [anoBase, mesBase] = form.mesCompetencia.split('-').map(Number);
-    const novasTransacoes = [];
-    const grupoId = `auto-${Date.now()}`;
-
-    for (let i = 0; i < numParcelas; i++) {
-      let dataParcela = new Date(anoBase, mesBase - 1 + i, 5);
-      let strAno = dataParcela.getFullYear();
-      let strMes = String(dataParcela.getMonth() + 1).padStart(2, '0');
-      let competenciaParcela = `${strAno}-${strMes}`;
-      
-      const novaT = {
-        data: `${strAno}-${strMes}-05`,
-        mesCompetencia: competenciaParcela,
-        descricao: numParcelas > 1 ? `${form.descricao} (${i + 1}/${numParcelas})` : form.descricao,
-        valor: valorParcela,
-        categoria: form.eAutofinanciamento ? 'Autofinanciamento (Devolução)' : form.categoria,
+    if (editandoId) {
+      // Modo Edição
+      const transacaoAtualizada = {
+        descricao: form.descricao,
+        valor: valorNumerico,
+        categoria: form.categoria,
         pagador: form.pagador,
         tipoDivisao: form.tipoDivisao,
         meioPagamento: form.meioPagamento,
-        parcelas: numParcelas,
-        parcelaAtual: i + 1,
-        grupoId: form.eAutofinanciamento ? grupoId : null,
-        eAutofinanciamento: form.eAutofinanciamento,
-        eReceita: form.eReceita
+        mesCompetencia: form.mesCompetencia
       };
 
       if (db && usuario) {
         try {
-          const docRef = await addDoc(collection(db, "transacoes"), novaT);
-          novasTransacoes.push({ id: docRef.id, ...novaT });
+          await updateDoc(doc(db, "transacoes", editandoId), transacaoAtualizada);
         } catch (err) {
-          console.error("Erro ao salvar no Firestore", err);
+          console.error("Erro ao atualizar no Firestore", err);
         }
-      } else {
-        novasTransacoes.push({ id: `${Date.now()}-${i}`, ...novaT });
       }
+
+      setTransacoes(prev => prev.map(t => t.id === editandoId ? { ...t, ...transacaoAtualizada } : t));
+      setEditandoId(null);
+    } else {
+      // Modo Novo Lançamento
+      const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
+      const valorParcela = valorNumerico / numParcelas;
+
+      const [anoBase, mesBase] = form.mesCompetencia.split('-').map(Number);
+      const novasTransacoes = [];
+      const grupoId = `auto-${Date.now()}`;
+
+      for (let i = 0; i < numParcelas; i++) {
+        let dataParcela = new Date(anoBase, mesBase - 1 + i, 5);
+        let strAno = dataParcela.getFullYear();
+        let strMes = String(dataParcela.getMonth() + 1).padStart(2, '0');
+        let competenciaParcela = `${strAno}-${strMes}`;
+        
+        const novaT = {
+          data: `${strAno}-${strMes}-05`,
+          mesCompetencia: competenciaParcela,
+          descricao: numParcelas > 1 ? `${form.descricao} (${i + 1}/${numParcelas})` : form.descricao,
+          valor: valorParcela,
+          categoria: form.eAutofinanciamento ? 'Autofinanciamento (Devolução)' : form.categoria,
+          pagador: form.pagador,
+          tipoDivisao: form.tipoDivisao,
+          meioPagamento: form.meioPagamento,
+          parcelas: numParcelas,
+          parcelaAtual: i + 1,
+          grupoId: form.eAutofinanciamento ? grupoId : null,
+          eAutofinanciamento: form.eAutofinanciamento,
+          eReceita: form.eReceita
+        };
+
+        if (db && usuario) {
+          try {
+            const docRef = await addDoc(collection(db, "transacoes"), novaT);
+            novasTransacoes.push({ id: docRef.id, ...novaT });
+          } catch (err) {
+            console.error("Erro ao salvar no Firestore", err);
+          }
+        } else {
+          novasTransacoes.push({ id: `${Date.now()}-${i}`, ...novaT });
+        }
+      }
+
+      setTransacoes(prev => [...novasTransacoes, ...prev]);
     }
 
-    setTransacoes(prev => [...novasTransacoes, ...prev]);
+    setForm({
+      descricao: '',
+      valor: '',
+      categoria: categoriasOrdenadas[0] || '',
+      pagador: 'pequeno',
+      tipoDivisao: '50/50',
+      meioPagamento: 'salario',
+      parcelas: 1,
+      eAutofinanciamento: false,
+      eReceita: false,
+      mesCompetencia: mesFiltro
+    });
+  };
+
+  const iniciarEdicaoTransacao = (t) => {
+    setEditandoId(t.id);
+    setForm({
+      descricao: t.descricao,
+      valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
+      categoria: t.categoria,
+      pagador: t.pagador || 'pequeno',
+      tipoDivisao: t.tipoDivisao || '50/50',
+      meioPagamento: t.meioPagamento || 'salario',
+      parcelas: t.parcelas || 1,
+      eAutofinanciamento: t.eAutofinanciamento || false,
+      eReceita: t.eReceita || false,
+      mesCompetencia: t.mesCompetencia || mesFiltro
+    });
+  };
+
+  const cancelarEdicao = () => {
+    setEditandoId(null);
     setForm({
       descricao: '',
       valor: '',
@@ -375,6 +433,7 @@ export default function App() {
       }
     }
     setTransacoes(prev => prev.filter(t => t.id !== id));
+    if (editandoId === id) cancelarEdicao();
   };
 
   const adicionarCategoria = (e) => {
@@ -784,23 +843,36 @@ export default function App() {
 
         {abaAtiva === 'lancamentos' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm h-fit space-y-4`}>
+            <div className={`p-4 rounded-xl border ${editandoId ? 'border-amber-500 bg-amber-500/5' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm h-fit space-y-4`}>
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm">Novo Gasto</h3>
-                <button 
-                  type="button" 
-                  onClick={iniciarReconhecimentoVoz}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    ouvindoVoz ? 'bg-rose-500 text-white animate-pulse' : 'bg-cyan-500/10 text-cyan-600 border border-cyan-500/30 hover:bg-cyan-500/20'
-                  }`}
-                  title="Falar gasto por voz"
-                >
-                  {ouvindoVoz ? <MicOff className="w-3.5 h-3.5"/> : <Mic className="w-3.5 h-3.5"/>}
-                  {ouvindoVoz ? 'Ouvindo...' : 'Falar Gasto'}
-                </button>
+                <h3 className="font-bold text-sm flex items-center gap-1.5">
+                  {editandoId ? <Edit3 className="w-4 h-4 text-amber-500"/> : <PlusCircle className="w-4 h-4 text-cyan-500"/>}
+                  {editandoId ? 'Editando Lançamento' : 'Novo Gasto'}
+                </h3>
+                {editandoId ? (
+                  <button 
+                    type="button" 
+                    onClick={cancelarEdicao}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-500/10 text-slate-400 hover:bg-slate-500/20"
+                  >
+                    <X className="w-3.5 h-3.5"/> Cancelar
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    onClick={iniciarReconhecimentoVoz}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      ouvindoVoz ? 'bg-rose-500 text-white animate-pulse' : 'bg-cyan-500/10 text-cyan-600 border border-cyan-500/30 hover:bg-cyan-500/20'
+                    }`}
+                    title="Falar gasto por voz"
+                  >
+                    {ouvindoVoz ? <MicOff className="w-3.5 h-3.5"/> : <Mic className="w-3.5 h-3.5"/>}
+                    {ouvindoVoz ? 'Ouvindo...' : 'Falar Gasto'}
+                  </button>
+                )}
               </div>
 
-              <form onSubmit={handleAdicionarTransacao} className="space-y-3">
+              <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
                   type="text" required placeholder="Descrição (ex: Supermercado)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
@@ -856,15 +928,15 @@ export default function App() {
                   <div>
                     <label className="text-xs text-slate-400 block mb-1">Parcelas</label>
                     <input 
-                      type="number" min="1" max="48"
+                      type="number" min="1" max="48" disabled={editandoId !== null}
                       value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
-                      className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoId !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     />
                   </div>
                 </div>
 
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm shadow-md transition-colors">
-                  Salvar Lançamento
+                <button type="submit" className={`w-full font-semibold py-2.5 rounded-lg text-sm shadow-md transition-colors text-white ${editandoId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                  {editandoId ? 'Atualizar Lançamento' : 'Salvar Lançamento'}
                 </button>
               </form>
             </div>
@@ -875,7 +947,7 @@ export default function App() {
                 <p className="text-xs text-slate-400 italic py-4">Nenhum lançamento para este mês com o filtro selecionado.</p>
               ) : (
                 transacoesDoMes.map(t => (
-                  <div key={t.id} className={`p-3 rounded-xl border ${t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
+                  <div key={t.id} className={`p-3 rounded-xl border ${editandoId === t.id ? 'border-amber-500 bg-amber-500/10' : t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
@@ -887,7 +959,14 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                      <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => iniciarEdicaoTransacao(t)} className="text-slate-400 hover:text-amber-500 p-1" title="Editar lançamento">
+                          <Edit3 className="w-4 h-4"/>
+                        </button>
+                        <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500 p-1" title="Excluir lançamento">
+                          <Trash2 className="w-4 h-4"/>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
