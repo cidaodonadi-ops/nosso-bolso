@@ -67,11 +67,8 @@ const arredondar2 = (valor) => {
   return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
 };
 
-// Parser robusto para extrair valores monetários por voz (números e por extenso)
 const extrairDadosPorVoz = (texto, categorias) => {
   const textoMinusculo = texto.toLowerCase();
-  
-  // Extração de valor monetário (ex: "50 reais", "120,50", "quinhentos reais")
   let valorCentavos = 0;
   
   const matchNumero = textoMinusculo.match(/(\d+(?:[\.,]\d{1,2})?)/);
@@ -83,18 +80,15 @@ const extrairDadosPorVoz = (texto, categorias) => {
     }
   }
 
-  // Identificação do pagador
   let pagador = null;
   if (textoMinusculo.includes('pequena')) pagador = 'pequena';
   if (textoMinusculo.includes('pequeno')) pagador = 'pequeno';
 
-  // Identificação da divisão
   let tipoDivisao = 'individual';
   if (textoMinusculo.includes('dividir') || textoMinusculo.includes('50/50') || textoMinusculo.includes('meio a meio')) {
     tipoDivisao = '50/50';
   }
 
-  // Identificação inteligente de categoria
   let categoriaEncontrada = null;
   for (const cat of categorias) {
     const palavrasCat = cat.toLowerCase().split(/[\/\s()&]+/);
@@ -157,7 +151,6 @@ export default function App() {
   const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
-  // Estados para alteração de senha autenticado
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
 
   const pagadorSugerido = useMemo(() => {
@@ -267,7 +260,6 @@ export default function App() {
     }
   };
 
-  // Funções de Autenticação e Recuperação de Senha
   const handleLogin = async (e) => {
     e.preventDefault();
     setErroAuth('');
@@ -278,7 +270,6 @@ export default function App() {
     }
     try {
       await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
-      // Salva opção para biometria no aparelho
       localStorage.setItem('nossobolso_ultimo_email', emailLogin);
     } catch (err) {
       try {
@@ -324,7 +315,6 @@ export default function App() {
     }
 
     try {
-      // Solicita autenticação biométrica/PIN do aparelho via WebAuthn API
       const credential = await navigator.credentials.get({
         publicKey: {
           challenge: new Uint8Array(32),
@@ -332,11 +322,10 @@ export default function App() {
           userVerification: "required"
         }
       });
-      if (credential || true) { // Sucesso na biometria do dispositivo
+      if (credential || true) {
         setUsuario({ email: emailSalvo });
       }
     } catch (e) {
-      // Fallback gracioso caso a biometria nativa não esteja configurada no servidor WebAuthn
       setUsuario({ email: emailSalvo });
     }
   };
@@ -364,7 +353,6 @@ export default function App() {
     setUsuario(null);
   };
 
-  // Filtros e Cálculos do App
   const transacoesDoMes = useMemo(() => {
     return transacoes.filter(t => {
       const matchMes = t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro));
@@ -724,7 +712,6 @@ export default function App() {
     salvarConfiguracoesNaNuvem(perfis, novas);
   };
 
-  // Reconhecimento de Voz Turbinado e Aprimorado
   const iniciarReconhecimentoVoz = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -739,7 +726,7 @@ export default function App() {
 
     recognition.onstart = () => setOuvindoVoz(true);
     recognition.onend = () => setOuvindoVoz(false);
-    recognition.onerror = (e) => {
+    recognition.onerror = () => {
       setOuvindoVoz(false);
       alert("Não foi possível capturar o áudio. Verifique se o navegador tem permissão para usar o microfone.");
     };
@@ -769,7 +756,7 @@ export default function App() {
             <div className="w-14 h-14 bg-gradient-to-tr from-cyan-500 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-lg shadow-cyan-500/20">
               <Sparkles className="w-7 h-7 text-white"/>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">NossoBolso</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Nosso Bolso</h1>
             <p className="text-xs text-slate-400 mt-1">Controle Financeiro Inteligente do Casal</p>
           </div>
 
@@ -872,7 +859,7 @@ export default function App() {
             <Sparkles className="w-5 h-5"/>
           </div>
           <div>
-            <h1 className="font-bold text-base sm:text-lg leading-tight tracking-tight">NossoBolso</h1>
+            <h1 className="font-bold text-base sm:text-lg leading-tight tracking-tight">Nosso Bolso</h1>
             <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Logado: <span className="font-semibold capitalize">{pagadorSugerido}</span></p>
           </div>
         </div>
@@ -992,7 +979,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Painel 50/50 */}
             <div className={`p-4 sm:p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-3 border-l-4 border-l-cyan-500`}>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
@@ -1057,7 +1043,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Painel de Reserva */}
             <div className={`p-4 sm:p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4 border-l-4 border-l-emerald-500`}>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -1086,7 +1071,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Gráfico Percentual */}
             <div className={`p-4 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
