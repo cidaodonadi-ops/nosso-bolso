@@ -61,6 +61,11 @@ const parseMoedaInput = (valorFormatado) => {
   return limpo;
 };
 
+// Arredonda rigorosamente para 2 casas decimais para evitar imprecisões de ponto flutuante
+const arredondar2 = (valor) => {
+  return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
+};
+
 export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [emailLogin, setEmailLogin] = useState('');
@@ -103,6 +108,14 @@ export default function App() {
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
+  // Determina o pagador padrão baseado no usuário logado (ex: se o email contiver 'pequena' ou configurável, ajusta; senão assume 'pequeno')
+  const pagadorSugerido = useMemo(() => {
+    if (!usuario || !usuario.email) return 'pequeno';
+    const emailStr = usuario.email.toLowerCase();
+    if (emailStr.includes('pequena')) return 'pequena';
+    return 'pequeno';
+  }, [usuario]);
+
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
@@ -115,6 +128,13 @@ export default function App() {
     eReceita: false,
     mesCompetencia: '2026-11'
   });
+
+  // Atualiza o pagador do form com a sugestão do usuário logado ao carregar
+  useEffect(() => {
+    if (usuario && !editandoTransacao) {
+      setForm(prev => ({ ...prev, pagador: pagadorSugerido }));
+    }
+  }, [usuario, pagadorSugerido]);
 
   const alternarTema = () => {
     setModoEscuro(prev => {
@@ -281,14 +301,14 @@ export default function App() {
     transacoes.forEach(t => {
       if (t.categoria && t.categoria.includes('Férias / 13º') && t.eReceita) {
         if (filtroPessoa === 'todos' || t.pagador === filtroPessoa) {
-          caixinhaViagens += Number(t.valor);
+          caixinhaViagens += arredondar2(t.valor);
         }
       }
     });
 
     transacoesDoMes.forEach(t => {
       if (t.eReceita) return;
-      const valor = Number(t.valor);
+      const valor = arredondar2(t.valor);
       
       if (t.tipoDivisao === '50/50') {
         if (t.pagador === 'pequeno') {
@@ -301,7 +321,7 @@ export default function App() {
 
     transacoesDashboardAtivas.forEach(t => {
       if (t.eReceita) return;
-      const valor = Number(t.valor);
+      const valor = arredondar2(t.valor);
       const cat = t.categoria || 'Outros';
 
       if (t.eAutofinanciamento) {
@@ -320,7 +340,7 @@ export default function App() {
         if (t.pagador === 'pequena') rendaExtraPequena += valor;
       }
 
-      gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + valor;
+      gastosPorCategoria[cat] = arredondar2((gastosPorCategoria[cat] || 0) + valor);
 
       if (
         cat.toLowerCase().includes('mercado') || 
@@ -336,8 +356,8 @@ export default function App() {
       gastosSalarioTotais += valor;
 
       if (t.tipoDivisao === '50/50') {
-        gastosPequenoSalario += valor / 2;
-        gastosPequenaSalario += valor / 2;
+        gastosPequenoSalario += arredondar2(valor / 2);
+        gastosPequenaSalario += arredondar2(valor / 2);
       } else {
         if (t.pagador === 'pequeno') gastosPequenoSalario += valor;
         if (t.pagador === 'pequena') gastosPequenaSalario += valor;
@@ -351,31 +371,31 @@ export default function App() {
 
     const fatorMultiplicador = modoVisualizacaoDashboard === 'ano' ? 12 : 1;
 
-    const orcamentoLivrePequeno = (salarioPequeno * fatorMultiplicador) - (metaPequeno * fatorMultiplicador) - gastosPequenoSalario;
-    const orcamentoLivrePequena = (salarioPequena * fatorMultiplicador) - (metaPequena * fatorMultiplicador) - gastosPequenaSalario;
+    const orcamentoLivrePequeno = arredondar2((salarioPequeno * fatorMultiplicador) - (metaPequeno * fatorMultiplicador) - gastosPequenoSalario);
+    const orcamentoLivrePequena = arredondar2((salarioPequena * fatorMultiplicador) - (metaPequena * fatorMultiplicador) - gastosPequenaSalario);
 
-    const totalGasto5050Mes = totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50;
-    const parteIdealCadaUm = totalGasto5050Mes / 2;
-    const saldoLiquidoPequeno = totalPagoPeloPequenoEm50_50 - parteIdealCadaUm; 
+    const totalGasto5050Mes = arredondar2(totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50);
+    const parteIdealCadaUm = arredondar2(totalGasto5050Mes / 2);
+    const saldoLiquidoPequeno = arredondar2(totalPagoPeloPequenoEm50_50 - parteIdealCadaUm); 
 
     return {
-      gastosSalarioTotais,
-      gastosPequenoSalario,
-      gastosPequenaSalario,
-      totalAutofinanciamentoMes,
-      caixinhaViagens,
+      gastosSalarioTotais: arredondar2(gastosSalarioTotais),
+      gastosPequenoSalario: arredondar2(gastosPequenoSalario),
+      gastosPequenaSalario: arredondar2(gastosPequenaSalario),
+      totalAutofinanciamentoMes: arredondar2(totalAutofinanciamentoMes),
+      caixinhaViagens: arredondar2(caixinhaViagens),
       orcamentoLivrePequeno,
       orcamentoLivrePequena,
-      totalAlimentacaoConsolidado,
-      totalInvestidoMes,
-      investidoPequeno,
-      investidoPequena,
-      totalRendaExtraMes,
-      rendaExtraPequeno,
-      rendaExtraPequena,
+      totalAlimentacaoConsolidado: arredondar2(totalAlimentacaoConsolidado),
+      totalInvestidoMes: arredondar2(totalInvestidoMes),
+      investidoPequeno: arredondar2(investidoPequeno),
+      investidoPequena: arredondar2(investidoPequena),
+      totalRendaExtraMes: arredondar2(totalRendaExtraMes),
+      rendaExtraPequeno: arredondar2(rendaExtraPequeno),
+      rendaExtraPequena: arredondar2(rendaExtraPequena),
       gastosPorCategoria,
-      totalPagoPeloPequenoEm50_50,
-      totalPagoPelaPequenaEm50_50,
+      totalPagoPeloPequenoEm50_50: arredondar2(totalPagoPeloPequenoEm50_50),
+      totalPagoPelaPequenaEm50_50: arredondar2(totalPagoPelaPequenaEm50_50),
       totalGasto5050Mes,
       saldoLiquidoPequeno
     };
@@ -383,7 +403,7 @@ export default function App() {
 
   const handleSalvarTransacao = async (e) => {
     e.preventDefault();
-    const valorNumerico = parseFloat(parseMoedaInput(form.valor));
+    const valorNumerico = arredondar2(parseFloat(parseMoedaInput(form.valor)));
     if (!form.descricao || isNaN(valorNumerico)) return;
 
     if (editandoTransacao) {
@@ -438,7 +458,7 @@ export default function App() {
       setEditandoTransacao(null);
     } else {
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
-      const valorParcela = valorNumerico / numParcelas;
+      const valorParcela = arredondar2(valorNumerico / numParcelas);
 
       const [anoBase, mesBase] = form.mesCompetencia.split('-').map(Number);
       const novasTransacoes = [];
@@ -485,7 +505,7 @@ export default function App() {
       descricao: '',
       valor: '',
       categoria: categoriasOrdenadas[0] || '',
-      pagador: 'pequeno',
+      pagador: pagadorSugerido,
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
@@ -503,7 +523,7 @@ export default function App() {
       descricao: descLimpa,
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       categoria: t.categoria,
-      pagador: t.pagador || 'pequeno',
+      pagador: t.pagador || pagadorSugerido,
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
       parcelas: t.parcelas || 1,
@@ -519,7 +539,7 @@ export default function App() {
       descricao: '',
       valor: '',
       categoria: categoriasOrdenadas[0] || '',
-      pagador: 'pequeno',
+      pagador: pagadorSugerido,
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
@@ -580,8 +600,9 @@ export default function App() {
       const matchValor = texto.match(/(\d+)(?:\s*(?:reais|real))?/);
       let valorExtraido = matchValor ? matchValor[1] : '';
 
-      let pagadorExtraido = 'pequeno';
+      let pagadorExtraido = pagadorSugerido;
       if (texto.includes('pequena')) pagadorExtraido = 'pequena';
+      if (texto.includes('pequeno')) pagadorExtraido = 'pequeno';
 
       setForm(prev => ({
         ...prev,
@@ -651,7 +672,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-lg leading-tight tracking-tight">NossoBolso</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Pequeno & Pequena</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Logado como: <span className="font-semibold capitalize">{pagadorSugerido}</span></p>
           </div>
         </div>
 
@@ -784,27 +805,27 @@ export default function App() {
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 block">Total Compartilhado ({mesFiltro})</span>
-                  <span className="text-sm font-bold">R$ {calculos.totalGasto5050Mes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-sm font-bold">R$ {calculos.totalGasto5050Mes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
 
               <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-4 ${modoEscuro ? 'bg-slate-700/40 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-400 block">Resumo dos Pagamentos 50/50 no mês:</span>
-                  <p className="text-xs">• Pago pelo Pequeno: <strong>R$ {calculos.totalPagoPeloPequenoEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></p>
-                  <p className="text-xs">• Pago pela Pequena: <strong>R$ {calculos.totalPagoPelaPequenaEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></p>
+                  <p className="text-xs">• Pago pelo Pequeno: <strong>R$ {calculos.totalPagoPeloPequenoEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
+                  <p className="text-xs">• Pago pela Pequena: <strong>R$ {calculos.totalPagoPelaPequenaEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
                 </div>
 
                 <div className="text-right border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-6 border-slate-300 dark:border-slate-600 w-full md:w-auto">
                   {calculos.saldoLiquidoPequeno > 0 ? (
                     <div>
                       <span className="text-[10px] font-semibold text-pink-500 block uppercase">Reembolso Devido</span>
-                      <span className="text-base font-bold text-pink-600">Pequena deve depositar R$ {calculos.saldoLiquidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ao Pequeno</span>
+                      <span className="text-base font-bold text-pink-600">Pequena deve depositar R$ {calculos.saldoLiquidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ao Pequeno</span>
                     </div>
                   ) : calculos.saldoLiquidoPequeno < 0 ? (
                     <div>
                       <span className="text-[10px] font-semibold text-cyan-500 block uppercase">Reembolso Devido</span>
-                      <span className="text-base font-bold text-cyan-600">Pequeno deve depositar R$ {Math.abs(calculos.saldoLiquidoPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} à Pequena</span>
+                      <span className="text-base font-bold text-cyan-600">Pequeno deve depositar R$ {Math.abs(calculos.saldoLiquidoPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} à Pequena</span>
                     </div>
                   ) : (
                     <div>
@@ -819,19 +840,19 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
                 <p className="text-xs text-slate-500 font-medium">Gastos Totais ({modoVisualizacaoDashboard === 'mes' ? 'Mês' : 'Ano'})</p>
-                <p className="text-xl font-bold mt-1">R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-xl font-bold mt-1">R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-amber-500`}>
                 <p className="text-xs text-amber-500 font-semibold flex items-center gap-1"><Utensils className="w-3.5 h-3.5"/> Total Alimentação</p>
-                <p className="text-xl font-bold mt-1">R$ {calculos.totalAlimentacaoConsolidado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-xl font-bold mt-1">R$ {calculos.totalAlimentacaoConsolidado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-cyan-500`}>
                 <p className="text-xs text-cyan-500 font-semibold">Valor Livre Pequeno</p>
-                <p className="text-lg font-bold mt-1">R$ {calculos.orcamentoLivrePequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-lg font-bold mt-1">R$ {calculos.orcamentoLivrePequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-pink-500`}>
                 <p className="text-xs text-pink-500 font-semibold">Valor Livre Pequena</p>
-                <p className="text-lg font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-lg font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
 
@@ -850,15 +871,15 @@ export default function App() {
                 <div className="flex gap-4 text-right">
                   <div>
                     <span className="text-[10px] text-cyan-500 font-semibold block uppercase">Pequeno</span>
-                    <span className="text-sm font-bold">R$ {(calculos.investidoPequeno + calculos.rendaExtraPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-bold">R$ {(calculos.investidoPequeno + calculos.rendaExtraPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
                     <span className="text-[10px] text-pink-500 font-semibold block uppercase">Pequena</span>
-                    <span className="text-sm font-bold">R$ {(calculos.investidoPequena + calculos.rendaExtraPequena).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-bold">R$ {(calculos.investidoPequena + calculos.rendaExtraPequena).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
                     <span className="text-[10px] text-emerald-500 font-semibold block uppercase">Total Guardado</span>
-                    <span className="text-base font-bold text-emerald-600">R$ {(calculos.totalInvestidoMes + calculos.totalRendaExtraMes).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-base font-bold text-emerald-600">R$ {(calculos.totalInvestidoMes + calculos.totalRendaExtraMes).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               </div>
@@ -868,7 +889,7 @@ export default function App() {
                   <span className="text-emerald-500 font-semibold flex items-center gap-1.5">
                     <TrendingUp className="w-3.5 h-3.5"/> Inclui Renda Extra / Serviços (Aporte):
                   </span>
-                  <span className="font-bold text-emerald-600">+ R$ {calculos.totalRendaExtraMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span className="font-bold text-emerald-600">+ R$ {calculos.totalRendaExtraMes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               )}
             </div>
@@ -881,7 +902,7 @@ export default function App() {
                   <h3 className="font-bold text-base">Distribuição Percentual de Gastos por Categoria ({modoVisualizacaoDashboard === 'mes' ? mesFiltro : `Ano ${anoFiltro}`})</h3>
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-500">
-                  Total: R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  Total: R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
 
@@ -904,7 +925,7 @@ export default function App() {
                           key={cat}
                           className={`${corClasse} h-full transition-all duration-500 hover:opacity-90`}
                           style={{ width: `${porcentagem}%` }}
-                          title={`${cat}: R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${porcentagem.toFixed(1)}%)`}
+                          title={`${cat}: R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${porcentagem.toFixed(1)}%)`}
                         ></div>
                       );
                     })}
@@ -920,7 +941,7 @@ export default function App() {
                             <span className="text-xs font-semibold">{cat}</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-xs font-bold block">R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-xs font-bold block">R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             <span className="text-[10px] text-cyan-500 font-semibold">{porcentagem.toFixed(1)}% do total</span>
                           </div>
                         </div>
@@ -961,7 +982,7 @@ export default function App() {
                       </div>
                       <div className="text-right">
                         <span className="text-xs text-indigo-500 font-semibold block">Devolução para Reserva</span>
-                        <span className="font-bold text-sm text-indigo-600">R$ {Number(t.valor).toFixed(2)}/mês</span>
+                        <span className="font-bold text-sm text-indigo-600">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mês</span>
                       </div>
                     </div>
                   ))}
@@ -982,7 +1003,7 @@ export default function App() {
                 <p className="text-xs text-slate-400">Acúmulo de reservas para viagens e 13º/férias.</p>
               </div>
             </div>
-            <p className="text-xl font-bold text-emerald-600 mt-4">Total Acumulado: R$ {calculos.caixinhaViagens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <p className="text-xl font-bold text-emerald-600 mt-4">Total Acumulado: R$ {calculos.caixinhaViagens.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         )}
 
@@ -1180,10 +1201,10 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-slate-400 block mb-1">Quem Pagou?</label>
+                    <label className="text-xs text-slate-400 block mb-1">Quem Pagou? (Sugerido)</label>
                     <select
                       value={form.pagador} onChange={(e) => setForm({...form, pagador: e.target.value})}
-                      className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border font-semibold ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     >
                       <option value="pequeno">Pequeno</option>
                       <option value="pequena">Pequena</option>
@@ -1238,7 +1259,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       <div className="flex items-center gap-1">
                         <button onClick={() => iniciarEdicaoTransacao(t)} className="text-slate-400 hover:text-amber-500 p-1" title="Editar lançamento">
                           <Edit3 className="w-4 h-4"/>
