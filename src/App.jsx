@@ -39,6 +39,7 @@ const CATEGORIAS_PADRAO = [
   'Vestuário & Cuidados',
   'Lazer & Superfaturados',
   'Saúde & Farmácia',
+  'Investimentos / Aportes',
   'Autofinanciamento (Devolução)',
   'Férias / 13º / 1/3 (Viagens)',
   'Outros'
@@ -241,6 +242,11 @@ export default function App() {
     let totalAutofinanciamentoMes = 0;
     let caixinhaViagens = 0;
     let totalAlimentacaoConsolidado = 0;
+    
+    let totalInvestidoMes = 0;
+    let investidoPequeno = 0;
+    let investidoPequena = 0;
+    
     let gastosPorCategoria = {};
 
     transacoes.forEach(t => {
@@ -258,6 +264,13 @@ export default function App() {
 
       if (t.eAutofinanciamento) {
         totalAutofinanciamentoMes += valor;
+      }
+
+      // Identificar Investimentos / Aportes
+      if (cat.toLowerCase().includes('investimento') || cat.toLowerCase().includes('aporte')) {
+        totalInvestidoMes += valor;
+        if (t.pagador === 'pequeno') investidoPequeno += valor;
+        if (t.pagador === 'pequena') investidoPequena += valor;
       }
 
       gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + valor;
@@ -301,6 +314,9 @@ export default function App() {
       orcamentoLivrePequeno,
       orcamentoLivrePequena,
       totalAlimentacaoConsolidado,
+      totalInvestidoMes,
+      investidoPequeno,
+      investidoPequena,
       gastosPorCategoria
     };
   }, [transacoes, transacoesDoMes, perfis, filtroPessoa]);
@@ -311,7 +327,6 @@ export default function App() {
     if (!form.descricao || isNaN(valorNumerico)) return;
 
     if (editandoId) {
-      // Modo Edição
       const transacaoAtualizada = {
         descricao: form.descricao,
         valor: valorNumerico,
@@ -333,7 +348,6 @@ export default function App() {
       setTransacoes(prev => prev.map(t => t.id === editandoId ? { ...t, ...transacaoAtualizada } : t));
       setEditandoId(null);
     } else {
-      // Modo Novo Lançamento
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
       const valorParcela = valorNumerico / numParcelas;
 
@@ -633,6 +647,33 @@ export default function App() {
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-pink-500`}>
                 <p className="text-xs text-pink-500 font-semibold">Valor Livre Pequena</p>
                 <p className="text-lg font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+
+            {/* Painel de Investimentos / Aportes Realizados */}
+            <div className={`p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md flex flex-col md:flex-row items-center justify-between gap-4 border-l-4 border-l-emerald-500`}>
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                  <PiggyBank className="w-6 h-6"/>
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Reserva / Investimentos Realizados ({mesFiltro})</h3>
+                  <p className="text-xs text-slate-400">Total guardado pelo casal através de lançamentos de aportes.</p>
+                </div>
+              </div>
+              <div className="flex gap-4 text-right">
+                <div>
+                  <span className="text-[10px] text-cyan-500 font-semibold block uppercase">Pequeno</span>
+                  <span className="text-sm font-bold">R$ {calculos.investidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
+                  <span className="text-[10px] text-pink-500 font-semibold block uppercase">Pequena</span>
+                  <span className="text-sm font-bold">R$ {calculos.investidoPequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="border-l pl-4 border-slate-300 dark:border-slate-700">
+                  <span className="text-[10px] text-emerald-500 font-semibold block uppercase">Total Casal</span>
+                  <span className="text-base font-bold text-emerald-600">R$ {calculos.totalInvestidoMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
               </div>
             </div>
 
