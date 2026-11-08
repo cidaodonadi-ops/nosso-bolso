@@ -73,7 +73,6 @@ export default function App() {
     pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
 
-  // Garante que a categoria "Investimentos / Aportes" já nasça nas categorias padrão/locais
   const [categorias, setCategorias] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_categorias');
     if (salvo) {
@@ -91,7 +90,7 @@ export default function App() {
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [statusAviso, setStatusAviso] = useState({ tipo: '', mensagem: '' });
-  const [editandoId, setEditandoId] = useState(null);
+  const [editandoTransacao, setEditandoTransacao] = useState(null);
 
   const [modoEscuro, setModoEscuro] = useState(() => {
     const temaSalvo = localStorage.getItem('nossobolso_tema');
@@ -337,8 +336,16 @@ export default function App() {
     const valorNumerico = parseFloat(parseMoedaInput(form.valor));
     if (!form.descricao || isNaN(valorNumerico)) return;
 
-    if (editandoId) {
-      const transacaoAtualizada = {
+    if (editandoTransacao) {
+      // Pergunta se deseja atualizar os próximos lançamentos do grupo (caso pertença a um parcelamento/grupo)
+      let atualizarProximos = false;
+      if (editandoTransacao.grupoId || editandoTransacao.parcelas > 1) {
+        atualizarProximos = window.confirm(
+          "Deseja aplicar esta alteração a este lançamento e a TODOS os próximos parcelamentos futuros deste grupo?"
+        );
+      }
+
+      const dadosAtualizados = {
         descricao: form.descricao,
         valor: valorNumerico,
         categoria: form.categoria,
@@ -348,23 +355,48 @@ export default function App() {
         mesCompetencia: form.mesCompetencia
       };
 
-      if (db && usuario) {
-        try {
-          await updateDoc(doc(db, "transacoes", editandoId), transacaoAtualizada);
-        } catch (err) {
-          console.error("Erro ao atualizar no Firestore", err);
+      if (atualizarProximos && editandoTransacao.grupoId) {
+        // Atualiza a lista inteira do grupo a partir da parcela atual em diante
+        const idGrupo = editandoTransacao.grupoId;
+        const parcelaRef = editandoTransacao.parcelaAtual || 1;
+
+        setTransacoes(prev => prev.map(t => {
+          if (t.grupoId === idGrupo && (t.parcelaAtual >= parcelaRef || !t.parcelaAtual)) {
+            if (db && usuario) {
+              updateDoc(doc(db, "transacoes", t.id), {
+                ...dadosAtualizados,
+                descricao: t.parcelas > 1 ? `${form.descricao} (${t.parcelaAtual}/${t.parcelas})` : form.descricao
+              }).catch(err => console.error(err));
+            }
+            return {
+              ...t,
+              ...dadosAtualizados,
+              descricao: t.parcelas > 1 ? `${form.descricao} (${t.parcelaAtual}/${t.parcelas})` : form.descricao
+            };
+          }
+          return t;
+        }));
+      } else {
+        // Atualiza apenas a parcela individual selecionada
+        if (db && usuario) {
+          try {
+            await updateDoc(doc(db, "transacoes", editandoTransacao.id), dadosAtualizados);
+          } catch (err) {
+            console.error("Erro ao atualizar no Firestore", err);
+          }
         }
+        setTransacoes(prev => prev.map(t => t.id === editandoTransacao.id ? { ...t, ...dadosAtualizados } : t));
       }
 
-      setTransacoes(prev => prev.map(t => t.id === editandoId ? { ...t, ...transacaoAtualizada } : t));
-      setEditandoId(null);
+      setEditandoTransacao(null);
     } else {
+      // Modo Novo Lançamento
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
       const valorParcela = valorNumerico / numParcelas;
 
       const [anoBase, mesBase] = form.mesCompetencia.split('-').map(Number);
       const novasTransacoes = [];
-      const grupoId = `auto-${Date.now()}`;
+      const grupoId = `grupo-${Date.now()}`;
 
       for (let i = 0; i < numParcelas; i++) {
         let dataParcela = new Date(anoBase, mesBase - 1 + i, 5);
@@ -383,7 +415,7 @@ export default function App() {
           meioPagamento: form.meioPagamento,
           parcelas: numParcelas,
           parcelaAtual: i + 1,
-          grupoId: form.eAutofinanciamento ? grupoId : null,
+          grupoId: numParcelas > 1 || form.eAutofinanciamento ? grupoId : null,
           eAutofinanciamento: form.eAutofinanciamento,
           eReceita: form.eReceita
         };
@@ -418,9 +450,12 @@ export default function App() {
   };
 
   const iniciarEdicaoTransacao = (t) => {
-    setEditandoId(t.id);
+    setEditandoTransacao(t);
+    // Remove o indicador de parcela da descrição (ex: "(1/12)") para facilitar edição do texto
+    const descLimpa = t.descricao.replace(/\s*\(\d+\/\d+\)$/, '');
+    
     setForm({
-      descricao: t.descricao,
+      descricao: descLimpa,
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       categoria: t.categoria,
       pagador: t.pagador || 'pequeno',
@@ -434,7 +469,7 @@ export default function App() {
   };
 
   const cancelarEdicao = () => {
-    setEditandoId(null);
+    setEditandoTransacao(null);
     setForm({
       descricao: '',
       valor: '',
@@ -458,7 +493,7 @@ export default function App() {
       }
     }
     setTransacoes(prev => prev.filter(t => t.id !== id));
-    if (editandoId === id) cancelarEdicao();
+    if (editandoTransacao?.id === id) cancelarEdicao();
   };
 
   const adicionarCategoria = (e) => {
@@ -924,13 +959,13 @@ export default function App() {
 
         {abaAtiva === 'lancamentos' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className={`p-4 rounded-xl border ${editandoId ? 'border-amber-500 bg-amber-500/5' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm h-fit space-y-4`}>
+            <div className={`p-4 rounded-xl border ${editandoTransacao ? 'border-amber-500 bg-amber-500/5' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm h-fit space-y-4`}>
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm flex items-center gap-1.5">
-                  {editandoId ? <Edit3 className="w-4 h-4 text-amber-500"/> : <PlusCircle className="w-4 h-4 text-cyan-500"/>}
-                  {editandoId ? 'Editando Lançamento' : 'Novo Gasto'}
+                  {editandoTransacao ? <Edit3 className="w-4 h-4 text-amber-500"/> : <PlusCircle className="w-4 h-4 text-cyan-500"/>}
+                  {editandoTransacao ? 'Editando Lançamento' : 'Novo Gasto'}
                 </h3>
-                {editandoId ? (
+                {editandoTransacao ? (
                   <button 
                     type="button" 
                     onClick={cancelarEdicao}
@@ -1009,15 +1044,15 @@ export default function App() {
                   <div>
                     <label className="text-xs text-slate-400 block mb-1">Parcelas</label>
                     <input 
-                      type="number" min="1" max="48" disabled={editandoId !== null}
+                      type="number" min="1" max="48" disabled={editandoTransacao !== null}
                       value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
-                      className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoId !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoTransacao !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     />
                   </div>
                 </div>
 
-                <button type="submit" className={`w-full font-semibold py-2.5 rounded-lg text-sm shadow-md transition-colors text-white ${editandoId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                  {editandoId ? 'Atualizar Lançamento' : 'Salvar Lançamento'}
+                <button type="submit" className={`w-full font-semibold py-2.5 rounded-lg text-sm shadow-md transition-colors text-white ${editandoTransacao ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                  {editandoTransacao ? 'Atualizar Lançamento' : 'Salvar Lançamento'}
                 </button>
               </form>
             </div>
@@ -1028,7 +1063,7 @@ export default function App() {
                 <p className="text-xs text-slate-400 italic py-4">Nenhum lançamento para este mês com o filtro selecionado.</p>
               ) : (
                 transacoesDoMes.map(t => (
-                  <div key={t.id} className={`p-3 rounded-xl border ${editandoId === t.id ? 'border-amber-500 bg-amber-500/10' : t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
+                  <div key={t.id} className={`p-3 rounded-xl border ${editandoTransacao?.id === t.id ? 'border-amber-500 bg-amber-500/10' : t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
