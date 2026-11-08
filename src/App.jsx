@@ -121,7 +121,7 @@ export default function App() {
     modoValor: 'fixo',
     categoria: CATEGORIAS_PADRAO[0],
     pagador: pagadorSugerido,
-    tipoDivisao: '50/50',
+    tipoDivisao: 'individual',
     meioPagamento: 'salario',
     parcelas: 1,
     eAutofinanciamento: false,
@@ -249,7 +249,6 @@ export default function App() {
     setUsuario(null);
   };
 
-  // Filtro estrito para o mês ativo (garante que apenas transações do mesFiltro apareçam)
   const transacoesDoMes = useMemo(() => {
     return transacoes.filter(t => {
       const matchMes = t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro));
@@ -259,7 +258,6 @@ export default function App() {
     });
   }, [transacoes, mesFiltro, filtroCategoriaLancamentos]);
 
-  // Transações do mês filtradas também por pessoa (para exibição e cálculos de gastos individuais)
   const transacoesDoMesFiltradasPorPessoa = useMemo(() => {
     return transacoesDoMes.filter(t => {
       if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') return false;
@@ -346,7 +344,6 @@ export default function App() {
         if (t.pagador === 'pequena') rendaExtraPequena += valorOriginal;
       }
 
-      // Divisão exata 50/50: 50% para cada um no orçamento pessoal
       let pesoNoOrcamentoPequeno = 0;
       let pesoNoOrcamentoPequena = 0;
 
@@ -530,14 +527,14 @@ export default function App() {
       setTransacoes(prev => [...novasTransacoes, ...prev]);
     }
 
-    // Reset rigoroso do formulário
+    // Reset rigoroso do formulário com padrão Individual (100%)
     setForm({
       descricao: '',
       valor: '',
       modoValor: 'fixo',
       categoria: categoriasOrdenadas[0] || '',
       pagador: pagadorSugerido,
-      tipoDivisao: '50/50',
+      tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
       eAutofinanciamento: false,
@@ -573,7 +570,7 @@ export default function App() {
       modoValor: 'fixo',
       categoria: categoriasOrdenadas[0] || '',
       pagador: pagadorSugerido,
-      tipoDivisao: '50/50',
+      tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
       eAutofinanciamento: false,
@@ -1264,8 +1261,8 @@ export default function App() {
                       value={form.tipoDivisao} onChange={(e) => setForm({...form, tipoDivisao: e.target.value})}
                       className={`w-full px-3 py-2 text-sm rounded-lg border font-semibold ${form.tipoDivisao === '50/50' ? 'border-amber-500 text-amber-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     >
-                      <option value="50/50">Dividir 50/50 (Casa)</option>
                       <option value="individual">Individual (100%)</option>
+                      <option value="50/50">Dividir 50/50 (Exceção)</option>
                     </select>
                   </div>
                 </div>
@@ -1315,7 +1312,6 @@ export default function App() {
                 <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum lançamento encontrado para este mês com o filtro selecionado.</p>
               ) : (
                 transacoesDoMesFiltradasPorPessoa.map(t => {
-                  // Se for 50/50 e estiver visualizando individualmente, exibe a metade correspondente para refletir o orçamento real
                   const valorExibido = (t.tipoDivisao === '50/50' && filtroPessoa !== 'todos') 
                     ? arredondar2(t.valor / 2) 
                     : t.valor;
