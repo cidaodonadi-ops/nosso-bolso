@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, LogOut, Lock, Mail, RefreshCw, Repeat
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -44,6 +44,24 @@ const CATEGORIAS_INICIAIS = [
   'Outros'
 ];
 
+// Função auxiliar para formatar inputs em moeda BRL (R$ 1.234,56)
+const formatarMoedaInput = (valor) => {
+  if (!valor) return '';
+  const numeroLimpo = String(valor).replace(/\D/g, '');
+  if (!numeroLimpo) return '';
+  const numeroFormatado = (Number(numeroLimpo) / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  return numeroFormatado;
+};
+
+const parseMoedaInput = (valorFormatado) => {
+  if (!valorFormatado) return '';
+  const limpo = String(valorFormatado).replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
+  return limpo;
+};
+
 export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [emailLogin, setEmailLogin] = useState('');
@@ -51,8 +69,8 @@ export default function App() {
   const [erroAuth, setErroAuth] = useState('');
 
   const [perfis, setPerfis] = useState({
-    pequeno: { nome: 'Pequeno', salario: 6000, va: 800, metaInvestimento: 800 },
-    pequena: { nome: 'Pequena', salario: 6000, va: 800, metaInvestimento: 800 }
+    pequeno: { nome: 'Pequeno', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' },
+    pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
 
   const [categorias, setCategorias] = useState(CATEGORIAS_INICIAIS);
@@ -62,7 +80,9 @@ export default function App() {
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [modoEscuro, setModoEscuro] = useState(false);
   const [mesFiltro, setMesFiltro] = useState('2026-11');
+  const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
+  // Mês de competência padrão para novos lançamentos (ex: 2026-11)
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
@@ -73,7 +93,8 @@ export default function App() {
     veiculo: 'nenhum',
     parcelas: 1,
     eAutofinanciamento: false,
-    eReceita: false
+    eReceita: false,
+    mesCompetencia: '2026-11'
   });
 
   useEffect(() => {
@@ -130,7 +151,7 @@ export default function App() {
   };
 
   const transacoesDoMes = useMemo(() => {
-    return transacoes.filter(t => t.data && t.data.startsWith(mesFiltro));
+    return transacoes.filter(t => t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro)));
   }, [transacoes, mesFiltro]);
 
   const autofinanciamentos = useMemo(() => {
@@ -142,11 +163,6 @@ export default function App() {
     let gastosPequenoSalario = 0;
     let gastosPequenaSalario = 0;
     let totalAutofinanciamentoMes = 0;
-    
-    let vaGastoPequeno = 0;
-    let vaGastoPequena = 0;
-    let pagoParaCasaPequeno = 0;
-    let pagoParaCasaPequena = 0;
     let caixinhaViagens = 0;
 
     transacoes.forEach(t => {
@@ -163,17 +179,11 @@ export default function App() {
         totalAutofinanciamentoMes += valor;
       }
 
-      if (t.meioPagamento === 'va') {
-        if (t.pagador === 'pequeno') vaGastoPequeno += valor;
-        if (t.pagador === 'pequena') vaGastoPequena += valor;
-        return;
-      }
+      if (t.meioPagamento === 'va') return;
 
       gastosSalarioTotais += valor;
 
       if (t.tipoDivisao === '50/50') {
-        if (t.pagador === 'pequeno') pagoParaCasaPequeno += valor;
-        if (t.pagador === 'pequena') pagoParaCasaPequena += valor;
         gastosPequenoSalario += valor / 2;
         gastosPequenaSalario += valor / 2;
       } else {
@@ -182,12 +192,10 @@ export default function App() {
       }
     });
 
-    const salarioPequeno = Number(perfis.pequeno.salario);
-    const salarioPequena = Number(perfis.pequena.salario);
-    const vaPequenoTotal = Number(perfis.pequeno.va);
-    const vaPequenaTotal = Number(perfis.pequena.va);
-    const metaPequeno = Number(perfis.pequeno.metaInvestimento);
-    const metaPequena = Number(perfis.pequena.metaInvestimento);
+    const salarioPequeno = Number(parseMoedaInput(perfis.pequeno.salario)) || 0;
+    const salarioPequena = Number(parseMoedaInput(perfis.pequena.salario)) || 0;
+    const metaPequeno = Number(parseMoedaInput(perfis.pequeno.metaInvestimento)) || 0;
+    const metaPequena = Number(parseMoedaInput(perfis.pequena.metaInvestimento)) || 0;
 
     const orcamentoLivrePequeno = salarioPequeno - metaPequeno - gastosPequenoSalario;
     const orcamentoLivrePequena = salarioPequena - metaPequena - gastosPequenaSalario;
@@ -197,10 +205,6 @@ export default function App() {
       gastosPequenoSalario,
       gastosPequenaSalario,
       totalAutofinanciamentoMes,
-      vaGastoPequeno,
-      vaGastoPequena,
-      vaRestantePequeno: vaPequenoTotal - vaGastoPequeno,
-      vaRestantePequena: vaPequenaTotal - vaGastoPequena,
       caixinhaViagens,
       orcamentoLivrePequeno,
       orcamentoLivrePequena
@@ -209,30 +213,31 @@ export default function App() {
 
   const handleAdicionarTransacao = async (e) => {
     e.preventDefault();
-    if (!form.descricao || !form.valor) return;
+    const valorNumerico = parseFloat(parseMoedaInput(form.valor));
+    if (!form.descricao || isNaN(valorNumerico)) return;
 
     const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
-    const valorTotal = parseFloat(form.valor);
-    const valorParcela = valorTotal / numParcelas;
+    const valorParcela = valorNumerico / numParcelas;
 
-    const [ano, mes] = mesFiltro.split('-').map(Number);
+    const [anoBase, mesBase] = form.mesCompetencia.split('-').map(Number);
     const novasTransacoes = [];
     const grupoId = `auto-${Date.now()}`;
 
     for (let i = 0; i < numParcelas; i++) {
-      let dataParcela = new Date(ano, mes - 1 + i, 5);
+      let dataParcela = new Date(anoBase, mesBase - 1 + i, 5);
       let strAno = dataParcela.getFullYear();
       let strMes = String(dataParcela.getMonth() + 1).padStart(2, '0');
+      let competenciaParcela = `${strAno}-${strMes}`;
       
       const novaT = {
         data: `${strAno}-${strMes}-05`,
+        mesCompetencia: competenciaParcela,
         descricao: numParcelas > 1 ? `${form.descricao} (${i + 1}/${numParcelas})` : form.descricao,
         valor: valorParcela,
         categoria: form.eAutofinanciamento ? 'Autofinanciamento (Devolução)' : form.categoria,
         pagador: form.pagador,
         tipoDivisao: form.tipoDivisao,
         meioPagamento: form.meioPagamento,
-        veiculo: form.veiculo,
         parcelas: numParcelas,
         parcelaAtual: i + 1,
         grupoId: form.eAutofinanciamento ? grupoId : null,
@@ -263,7 +268,8 @@ export default function App() {
       veiculo: 'nenhum',
       parcelas: 1,
       eAutofinanciamento: false,
-      eReceita: false
+      eReceita: false,
+      mesCompetencia: mesFiltro
     });
   };
 
@@ -291,16 +297,55 @@ export default function App() {
     setCategorias(categorias.filter(c => c !== catRemover));
   };
 
+  // Lógica de Comando de Voz Inteligente (SpeechRecognition)
+  const iniciarReconhecimentoVoz = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Seu navegador não suporta reconhecimento de voz. Tente usar o Google Chrome.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setOuvindoVoz(true);
+    recognition.onend = () => setOuvindoVoz(false);
+    recognition.onerror = () => setOuvindoVoz(false);
+
+    recognition.onresult = (event) => {
+      const texto = event.results[0][0].transcript.toLowerCase();
+      console.log("Voz capturada:", texto);
+
+      // Exemplo de interpretação simples: "gasto de 150 reais com mercado"
+      const matchValor = texto.match(/(\d+)(?:\s*(?:reais|real))?/);
+      let valorExtraido = matchValor ? matchValor[1] : '';
+
+      let pagadorExtraido = 'pequeno';
+      if (texto.includes('pequena')) pagadorExtraido = 'pequena';
+
+      setForm(prev => ({
+        ...prev,
+        descricao: event.results[0][0].transcript,
+        valor: valorExtraido ? formatarMoedaInput(valorExtraido + '00') : prev.valor,
+        pagador: pagadorExtraido
+      }));
+    };
+
+    recognition.start();
+  };
+
   if (!usuario) {
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4 font-sans">
         <div className="max-w-md w-full bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-xl space-y-6">
           <div className="text-center">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl mx-auto flex items-center justify-center mb-3 shadow-lg">
-              <Wallet className="w-6 h-6 text-white"/>
+            <div className="w-14 h-14 bg-gradient-to-tr from-cyan-500 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-lg shadow-cyan-500/20">
+              <Sparkles className="w-7 h-7 text-white"/>
             </div>
-            <h1 className="text-2xl font-bold">NossoBolso</h1>
-            <p className="text-xs text-slate-400 mt-1">Controle Financeiro do Casal</p>
+            <h1 className="text-2xl font-bold tracking-tight">NossoBolso</h1>
+            <p className="text-xs text-slate-400 mt-1">Controle Financeiro Inteligente do Casal</p>
           </div>
 
           {erroAuth && <div className="p-3 bg-rose-500/20 border border-rose-500 text-rose-300 text-xs rounded-lg">{erroAuth}</div>}
@@ -330,7 +375,7 @@ export default function App() {
               </div>
             </div>
 
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors shadow-md">
+            <button type="submit" className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold py-2.5 rounded-lg text-sm transition-all shadow-lg shadow-blue-500/25">
               Entrar ou Cadastrar
             </button>
           </form>
@@ -342,12 +387,12 @@ export default function App() {
   return (
     <div className={`min-h-screen ${modoEscuro ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'} transition-colors duration-200 font-sans pb-12`}>
       <header className={`sticky top-0 z-50 ${modoEscuro ? 'bg-slate-800/90 border-slate-700' : 'bg-white/90 border-slate-200'} backdrop-blur-md border-b px-4 py-3 flex items-center justify-between`}>
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl text-white shadow-md">
-            <Wallet className="w-5 h-5"/>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-gradient-to-tr from-cyan-500 to-indigo-600 rounded-xl text-white shadow-md shadow-cyan-500/20">
+            <Sparkles className="w-5 h-5"/>
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight">NossoBolso</h1>
+            <h1 className="font-bold text-lg leading-tight tracking-tight">NossoBolso</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">Pequeno & Pequena</p>
           </div>
         </div>
@@ -395,16 +440,16 @@ export default function App() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
-                <p className="text-xs text-slate-500 font-medium">Gastos Totais (Via Salário)</p>
+                <p className="text-xs text-slate-500 font-medium">Gastos Totais do Mês</p>
                 <p className="text-2xl font-bold mt-1">R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
-              <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-blue-500`}>
-                <p className="text-xs text-blue-500 font-semibold">Valor Livre Pequeno</p>
-                <p className="text-xl font-bold mt-1">R$ {calculos.orcamentoLivrePequeno.toFixed(2)}</p>
+              <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-cyan-500`}>
+                <p className="text-xs text-cyan-500 font-semibold">Valor Livre Pequeno</p>
+                <p className="text-xl font-bold mt-1">R$ {calculos.orcamentoLivrePequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-pink-500`}>
                 <p className="text-xs text-pink-500 font-semibold">Valor Livre Pequena</p>
-                <p className="text-xl font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toFixed(2)}</p>
+                <p className="text-xl font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
           </div>
@@ -434,7 +479,7 @@ export default function App() {
                           {t.parcelaAtual}/{t.parcelas}x
                         </span>
                         <span className="font-semibold text-sm">{t.descricao}</span>
-                        <p className="text-xs text-slate-500 mt-1">Pagador: {t.pagador} • Parcela: R$ {Number(t.valor).toFixed(2)}</p>
+                        <p className="text-xs text-slate-500 mt-1">Competência: {t.mesCompetencia} • Pagador: {t.pagador}</p>
                       </div>
                       <div className="text-right">
                         <span className="text-xs text-indigo-500 font-semibold block">Devolução para Reserva</span>
@@ -459,7 +504,7 @@ export default function App() {
                 <p className="text-xs text-slate-400">Acúmulo de reservas para viagens e 13º/férias.</p>
               </div>
             </div>
-            <p className="text-xl font-bold text-emerald-600 mt-4">Total Acumulado: R$ {calculos.caixinhaViagens.toFixed(2)}</p>
+            <p className="text-xl font-bold text-emerald-600 mt-4">Total Acumulado: R$ {calculos.caixinhaViagens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           </div>
         )}
 
@@ -470,61 +515,47 @@ export default function App() {
                 <Settings className="w-5 h-5 text-blue-500"/> Parâmetros de Salários e VA
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/30 space-y-3">
-                  <h3 className="font-bold text-blue-600 text-sm">Perfil Pequeno</h3>
-                  <div>
-                    <label className="text-xs text-slate-500 block">Salário (R$)</label>
-                    <input 
-                      type="number" value={perfis.pequeno.salario}
-                      onChange={(e) => setPerfis({...perfis, pequeno: {...perfis.pequeno, salario: e.target.value}})}
-                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 block">VA (R$)</label>
-                    <input 
-                      type="number" value={perfis.pequeno.va}
-                      onChange={(e) => setPerfis({...perfis, pequeno: {...perfis.pequeno, va: e.target.value}})}
-                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 block">Meta de Investimento / Reserva (R$)</label>
-                    <input 
-                      type="number" value={perfis.pequeno.metaInvestimento}
-                      onChange={(e) => setPerfis({...perfis, pequeno: {...perfis.pequeno, metaInvestimento: e.target.value}})}
-                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                    />
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl border border-pink-200 dark:border-pink-900 bg-pink-50/30 space-y-3">
-                  <h3 className="font-bold text-pink-600 text-sm">Perfil Pequena</h3>
-                  <div>
-                    <label className="text-xs text-slate-500 block">Salário (R$)</label>
-                    <input 
-                      type="number" value={perfis.pequena.salario}
-                      onChange={(e) => setPerfis({...perfis, pequena: {...perfis.pequena, salario: e.target.value}})}
-                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 block">VA (R$)</label>
-                    <input 
-                      type="number" value={perfis.pequena.va}
-                      onChange={(e) => setPerfis({...perfis, pequena: {...perfis.pequena, va: e.target.value}})}
-                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 block">Meta de Investimento / Reserva (R$)</label>
-                    <input 
-                      type="number" value={perfis.pequena.metaInvestimento}
-                      onChange={(e) => setPerfis({...perfis, pequena: {...perfis.pequena, metaInvestimento: e.target.value}})}
-                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                    />
-                  </div>
-                </div>
+                {['pequeno', 'pequena'].map((perfilKey) => {
+                  const p = perfis[perfilKey];
+                  return (
+                    <div key={perfilKey} className={`p-4 rounded-xl border ${perfilKey === 'pequeno' ? 'border-cyan-200 bg-cyan-50/20' : 'border-pink-200 bg-pink-50/25'} space-y-3`}>
+                      <h3 className={`font-bold text-sm capitalize ${perfilKey === 'pequeno' ? 'text-cyan-600' : 'text-pink-600'}`}>Perfil {p.nome}</h3>
+                      <div>
+                        <label className="text-xs text-slate-500 block">Salário (R$)</label>
+                        <input 
+                          type="text" value={p.salario}
+                          onChange={(e) => {
+                            const val = formatarMoedaInput(e.target.value);
+                            setPerfis({...perfis, [perfilKey]: {...p, salario: val}});
+                          }}
+                          className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 block">VA (R$)</label>
+                        <input 
+                          type="text" value={p.va}
+                          onChange={(e) => {
+                            const val = formatarMoedaInput(e.target.value);
+                            setPerfis({...perfis, [perfilKey]: {...p, va: val}});
+                          }}
+                          className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 block">Meta de Investimento / Reserva (R$)</label>
+                        <input 
+                          type="text" value={p.metaInvestimento}
+                          onChange={(e) => {
+                            const val = formatarMoedaInput(e.target.value);
+                            setPerfis({...perfis, [perfilKey]: {...p, metaInvestimento: val}});
+                          }}
+                          className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -557,19 +588,51 @@ export default function App() {
 
         {abaAtiva === 'lancamentos' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm h-fit`}>
-              <h3 className="font-bold text-sm mb-4">Novo Gasto</h3>
+            <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm h-fit space-y-4`}>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm">Novo Gasto</h3>
+                <button 
+                  type="button" 
+                  onClick={iniciarReconhecimentoVoz}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    ouvindoVoz ? 'bg-rose-500 text-white animate-pulse' : 'bg-cyan-500/10 text-cyan-600 border border-cyan-500/30 hover:bg-cyan-500/20'
+                  }`}
+                  title="Falar gasto por voz"
+                >
+                  {ouvindoVoz ? <MicOff className="w-3.5 h-3.5"/> : <Mic className="w-3.5 h-3.5"/>}
+                  {ouvindoVoz ? 'Ouvindo...' : 'Falar Gasto'}
+                </button>
+              </div>
+
               <form onSubmit={handleAdicionarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição do Gasto"
+                  type="text" required placeholder="Descrição (ex: Supermercado)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
-                <input 
-                  type="number" step="0.01" required placeholder="Valor Total (R$)"
-                  value={form.valor} onChange={(e) => setForm({...form, valor: e.target.value})}
-                  className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                />
+                
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Valor Total (R$)</label>
+                  <input 
+                    type="text" required placeholder="0,00"
+                    value={form.valor} 
+                    onChange={(e) => {
+                      const formatado = formatarMoedaInput(e.target.value);
+                      setForm({...form, valor: formatado});
+                    }}
+                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1">Mês da Fatura / Competência</label>
+                  <input 
+                    type="month"
+                    value={form.mesCompetencia}
+                    onChange={(e) => setForm({...form, mesCompetencia: e.target.value})}
+                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                  />
+                </div>
                 
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">Categoria / Classe</label>
@@ -583,56 +646,56 @@ export default function App() {
                   </select>
                 </div>
 
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-900 flex items-center gap-2">
-                  <input 
-                    type="checkbox"
-                    id="chkAuto"
-                    checked={form.eAutofinanciamento}
-                    onChange={(e) => setForm({...form, eAutofinanciamento: e.target.checked})}
-                    className="w-4 h-4 text-indigo-600 rounded"
-                  />
-                  <label htmlFor="chkAuto" className="text-xs font-semibold text-indigo-900 dark:text-indigo-200 cursor-pointer">
-                    É Autofinanciamento? (Financiei de mim mesmo)
-                  </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Pagador</label>
+                    <select
+                      value={form.pagador} onChange={(e) => setForm({...form, pagador: e.target.value})}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    >
+                      <option value="pequeno">Pequeno</option>
+                      <option value="pequena">Pequena</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Parcelas</label>
+                    <input 
+                      type="number" min="1" max="48"
+                      value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={form.pagador} onChange={(e) => setForm({...form, pagador: e.target.value})}
-                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                  >
-                    <option value="pequeno">Pequeno</option>
-                    <option value="pequena">Pequena</option>
-                  </select>
-                  <input 
-                    type="number" min="1" max="48" placeholder="Parcelas"
-                    value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
-                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                  />
-                </div>
-                <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm">Salvar Lançamento</button>
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm shadow-md transition-colors">
+                  Salvar Lançamento
+                </button>
               </form>
             </div>
 
             <div className="md:col-span-2 space-y-3">
-              <h3 className="font-bold text-sm text-slate-500">Lançamentos de {mesFiltro}</h3>
-              {transacoesDoMes.map(t => (
-                <div key={t.id} className={`p-3 rounded-xl border ${t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between`}>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
-                        {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
-                      <span className="font-semibold text-sm">{t.descricao}</span>
+              <h3 className="font-bold text-sm text-slate-500">Lançamentos de Competência: {mesFiltro}</h3>
+              {transacoesDoMes.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-4">Nenhum lançamento para este mês.</p>
+              ) : (
+                transacoesDoMes.map(t => (
+                  <div key={t.id} className={`p-3 rounded-xl border ${t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
+                          {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
+                        <span className="font-semibold text-sm">{t.descricao}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-sm">R$ {Number(t.valor).toFixed(2)}</span>
-                    <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
