@@ -79,7 +79,7 @@ export default function App() {
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [modoEscuro, setModoEscuro] = useState(false);
   const [mesFiltro, setMesFiltro] = useState('2026-11');
-  const [filtroPessoa, setFiltroPessoa] = useState('todos'); // 'todos', 'pequeno', 'pequena'
+  const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
   const [form, setForm] = useState({
@@ -94,6 +94,11 @@ export default function App() {
     eReceita: false,
     mesCompetencia: '2026-11'
   });
+
+  // Categorias sempre ordenadas alfabeticamente
+  const categoriasOrdenadas = useMemo(() => {
+    return [...categorias].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  }, [categorias]);
 
   useEffect(() => {
     if (!auth) return;
@@ -275,7 +280,7 @@ export default function App() {
     setForm({
       descricao: '',
       valor: '',
-      categoria: categorias[0],
+      categoria: categoriasOrdenadas[0] || '',
       pagador: 'pequeno',
       tipoDivisao: '50/50',
       meioPagamento: 'salario',
@@ -300,8 +305,9 @@ export default function App() {
   const adicionarCategoria = (e) => {
     e.preventDefault();
     if (!novaCategoriaInput.trim()) return;
-    if (!categorias.includes(novaCategoriaInput.trim())) {
-      setCategorias([...categorias, novaCategoriaInput.trim()]);
+    const nomeFormatado = novaCategoriaInput.trim();
+    if (!categorias.includes(nomeFormatado)) {
+      setCategorias([...categorias, nomeFormatado]);
     }
     setNovaCategoriaInput('');
   };
@@ -421,7 +427,6 @@ export default function App() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 mt-6">
-        {/* Barra de Filtro de Pessoa */}
         <div className={`p-3 rounded-xl border mb-6 flex items-center justify-between shadow-sm ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-cyan-500"/>
@@ -489,7 +494,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Painel Gráfico de Gastos por Categoria */}
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <div className="flex items-center gap-2 mb-2">
                 <PieChart className="w-5 h-5 text-cyan-500"/>
@@ -500,7 +504,7 @@ export default function App() {
                 <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum gasto registrado para este mês com o filtro selecionado.</p>
               ) : (
                 <div className="space-y-3">
-                  {Object.entries(calculos.gastosPorCategoria).map(([cat, val]) => {
+                  {Object.entries(calculos.gastosPorCategoria).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR')).map(([cat, val]) => {
                     const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
                     return (
                       <div key={cat} className="space-y-1">
@@ -628,7 +632,7 @@ export default function App() {
             </div>
 
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
-              <h2 className="text-lg font-bold">Classes / Categorias de Gastos</h2>
+              <h2 className="text-lg font-bold">Classes / Categorias de Gastos (Ordem Alfabética)</h2>
               <form onSubmit={adicionarCategoria} className="flex gap-2">
                 <input 
                   type="text" placeholder="Nome da nova categoria..."
@@ -641,7 +645,7 @@ export default function App() {
               </form>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4 max-h-60 overflow-y-auto">
-                {categorias.map(cat => (
+                {categoriasOrdenadas.map(cat => (
                   <div key={cat} className={`flex justify-between items-center p-2.5 rounded-lg border ${modoEscuro ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                     <span className="text-sm font-medium">{cat}</span>
                     <button onClick={() => removerCategoria(cat)} className="text-slate-400 hover:text-rose-500 p-1">
@@ -708,7 +712,7 @@ export default function App() {
                     value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})}
                     className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                   >
-                    {categorias.map(cat => (
+                    {categoriasOrdenadas.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
