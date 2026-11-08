@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -44,7 +44,6 @@ const CATEGORIAS_INICIAIS = [
   'Outros'
 ];
 
-// Função auxiliar para formatar inputs em moeda BRL (R$ 1.234,56)
 const formatarMoedaInput = (valor) => {
   if (!valor) return '';
   const numeroLimpo = String(valor).replace(/\D/g, '');
@@ -80,9 +79,9 @@ export default function App() {
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [modoEscuro, setModoEscuro] = useState(false);
   const [mesFiltro, setMesFiltro] = useState('2026-11');
+  const [filtroPessoa, setFiltroPessoa] = useState('todos'); // 'todos', 'pequeno', 'pequena'
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
-  // Mês de competência padrão para novos lançamentos (ex: 2026-11)
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
@@ -90,7 +89,6 @@ export default function App() {
     pagador: 'pequeno',
     tipoDivisao: '50/50',
     meioPagamento: 'salario',
-    veiculo: 'nenhum',
     parcelas: 1,
     eAutofinanciamento: false,
     eReceita: false,
@@ -151,12 +149,21 @@ export default function App() {
   };
 
   const transacoesDoMes = useMemo(() => {
-    return transacoes.filter(t => t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro)));
-  }, [transacoes, mesFiltro]);
+    return transacoes.filter(t => {
+      const matchMes = t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro));
+      if (!matchMes) return false;
+      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa) return false;
+      return true;
+    });
+  }, [transacoes, mesFiltro, filtroPessoa]);
 
   const autofinanciamentos = useMemo(() => {
-    return transacoes.filter(t => t.eAutofinanciamento);
-  }, [transacoes]);
+    return transacoes.filter(t => {
+      if (!t.eAutofinanciamento) return false;
+      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa) return false;
+      return true;
+    });
+  }, [transacoes, filtroPessoa]);
 
   const calculos = useMemo(() => {
     let gastosSalarioTotais = 0;
@@ -164,10 +171,13 @@ export default function App() {
     let gastosPequenaSalario = 0;
     let totalAutofinanciamentoMes = 0;
     let caixinhaViagens = 0;
+    let gastosPorCategoria = {};
 
     transacoes.forEach(t => {
       if (t.categoria && t.categoria.includes('Férias / 13º') && t.eReceita) {
-        caixinhaViagens += Number(t.valor);
+        if (filtroPessoa === 'todos' || t.pagador === filtroPessoa) {
+          caixinhaViagens += Number(t.valor);
+        }
       }
     });
 
@@ -178,6 +188,9 @@ export default function App() {
       if (t.eAutofinanciamento) {
         totalAutofinanciamentoMes += valor;
       }
+
+      const cat = t.categoria || 'Outros';
+      gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + valor;
 
       if (t.meioPagamento === 'va') return;
 
@@ -207,9 +220,10 @@ export default function App() {
       totalAutofinanciamentoMes,
       caixinhaViagens,
       orcamentoLivrePequeno,
-      orcamentoLivrePequena
+      orcamentoLivrePequena,
+      gastosPorCategoria
     };
-  }, [transacoes, transacoesDoMes, perfis]);
+  }, [transacoes, transacoesDoMes, perfis, filtroPessoa]);
 
   const handleAdicionarTransacao = async (e) => {
     e.preventDefault();
@@ -265,7 +279,6 @@ export default function App() {
       pagador: 'pequeno',
       tipoDivisao: '50/50',
       meioPagamento: 'salario',
-      veiculo: 'nenhum',
       parcelas: 1,
       eAutofinanciamento: false,
       eReceita: false,
@@ -297,11 +310,10 @@ export default function App() {
     setCategorias(categorias.filter(c => c !== catRemover));
   };
 
-  // Lógica de Comando de Voz Inteligente (SpeechRecognition)
   const iniciarReconhecimentoVoz = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Seu navegador não suporta reconhecimento de voz. Tente usar o Google Chrome.");
+      alert("Seu navegador não suporta reconhecimento de voz.");
       return;
     }
 
@@ -316,9 +328,6 @@ export default function App() {
 
     recognition.onresult = (event) => {
       const texto = event.results[0][0].transcript.toLowerCase();
-      console.log("Voz capturada:", texto);
-
-      // Exemplo de interpretação simples: "gasto de 150 reais com mercado"
       const matchValor = texto.match(/(\d+)(?:\s*(?:reais|real))?/);
       let valorExtraido = matchValor ? matchValor[1] : '';
 
@@ -412,6 +421,33 @@ export default function App() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 mt-6">
+        {/* Barra de Filtro de Pessoa */}
+        <div className={`p-3 rounded-xl border mb-6 flex items-center justify-between shadow-sm ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-cyan-500"/>
+            <span className="text-xs font-semibold text-slate-500">Visualizar por:</span>
+          </div>
+          <div className="flex gap-1.5">
+            {[
+              { id: 'todos', label: 'Casal (Ambos)' },
+              { id: 'pequeno', label: 'Pequeno' },
+              { id: 'pequena', label: 'Pequena' }
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => setFiltroPessoa(f.id)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  filtroPessoa === f.id 
+                    ? 'bg-cyan-600 text-white shadow-sm' 
+                    : modoEscuro ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <nav className="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto pb-2">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: Wallet },
@@ -452,6 +488,38 @@ export default function App() {
                 <p className="text-xl font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
+
+            {/* Painel Gráfico de Gastos por Categoria */}
+            <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
+              <div className="flex items-center gap-2 mb-2">
+                <PieChart className="w-5 h-5 text-cyan-500"/>
+                <h3 className="font-bold text-base">Distribuição de Gastos por Categoria ({mesFiltro})</h3>
+              </div>
+
+              {Object.keys(calculos.gastosPorCategoria).length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum gasto registrado para este mês com o filtro selecionado.</p>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(calculos.gastosPorCategoria).map(([cat, val]) => {
+                    const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
+                    return (
+                      <div key={cat} className="space-y-1">
+                        <div className="flex justify-between text-xs font-semibold">
+                          <span>{cat}</span>
+                          <span>R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({porcentagem.toFixed(1)}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-cyan-500 to-blue-600 h-2.5 rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.min(porcentagem, 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -469,7 +537,7 @@ export default function App() {
               </div>
 
               {autofinanciamentos.length === 0 ? (
-                <p className="text-center text-sm text-slate-400 py-6">Nenhum autofinanciamento registrado até o momento.</p>
+                <p className="text-center text-sm text-slate-400 py-6">Nenhum autofinanciamento registrado para o filtro selecionado.</p>
               ) : (
                 <div className="space-y-3 mt-4">
                   {autofinanciamentos.map(t => (
@@ -676,7 +744,7 @@ export default function App() {
             <div className="md:col-span-2 space-y-3">
               <h3 className="font-bold text-sm text-slate-500">Lançamentos de Competência: {mesFiltro}</h3>
               {transacoesDoMes.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-4">Nenhum lançamento para este mês.</p>
+                <p className="text-xs text-slate-400 italic py-4">Nenhum lançamento para este mês com o filtro selecionado.</p>
               ) : (
                 transacoesDoMes.map(t => (
                   <div key={t.id} className={`p-3 rounded-xl border ${t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
