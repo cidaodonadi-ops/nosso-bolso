@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -89,6 +89,7 @@ export default function App() {
   const [transacoes, setTransacoes] = useState([]);
 
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
+  const [modoVisualizacaoDashboard, setModoVisualizacaoDashboard] = useState('mes'); // 'mes' ou 'ano'
   const [statusAviso, setStatusAviso] = useState({ tipo: '', mensagem: '' });
   const [editandoTransacao, setEditandoTransacao] = useState(null);
 
@@ -99,6 +100,7 @@ export default function App() {
   });
 
   const [mesFiltro, setMesFiltro] = useState('2026-11');
+  const [anoFiltro, setAnoFiltro] = useState('2026');
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
@@ -237,6 +239,18 @@ export default function App() {
     });
   }, [transacoes, mesFiltro, filtroPessoa]);
 
+  // Filtro específico para o Dashboard no modo Anual
+  const transacoesDoAno = useMemo(() => {
+    return transacoes.filter(t => {
+      const anoTransacao = t.mesCompetencia ? t.mesCompetencia.split('-')[0] : (t.data ? t.data.split('-')[0] : '');
+      if (anoTransacao !== anoFiltro) return false;
+      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa) return false;
+      return true;
+    });
+  }, [transacoes, anoFiltro, filtroPessoa]);
+
+  const transacoesDashboardAtivas = modoVisualizacaoDashboard === 'mes' ? transacoesDoMes : transacoesDoAno;
+
   const autofinanciamentos = useMemo(() => {
     return transacoes.filter(t => {
       if (!t.eAutofinanciamento) return false;
@@ -270,7 +284,7 @@ export default function App() {
       }
     });
 
-    transacoesDoMes.forEach(t => {
+    transacoesDashboardAtivas.forEach(t => {
       if (t.eReceita) return;
       const valor = Number(t.valor);
       const cat = t.categoria || 'Outros';
@@ -279,7 +293,6 @@ export default function App() {
         totalAutofinanciamentoMes += valor;
       }
 
-      // Separador de Investimentos Regulares vs Renda Extra Aporte
       if (cat.toLowerCase().includes('investimento') || cat.toLowerCase().includes('aporte')) {
         totalInvestidoMes += valor;
         if (t.pagador === 'pequeno') investidoPequeno += valor;
@@ -321,8 +334,11 @@ export default function App() {
     const metaPequeno = Number(parseMoedaInput(perfis.pequeno.metaInvestimento)) || 0;
     const metaPequena = Number(parseMoedaInput(perfis.pequena.metaInvestimento)) || 0;
 
-    const orcamentoLivrePequeno = salarioPequeno - metaPequeno - gastosPequenoSalario;
-    const orcamentoLivrePequena = salarioPequena - metaPequena - gastosPequenaSalario;
+    // Se for modo ano, multiplicamos por 12 para estimar a base anual de salários e metas
+    const fatorMultiplicador = modoVisualizacaoDashboard === 'ano' ? 12 : 1;
+
+    const orcamentoLivrePequeno = (salarioPequeno * fatorMultiplicador) - (metaPequeno * fatorMultiplicador) - gastosPequenoSalario;
+    const orcamentoLivrePequena = (salarioPequena * fatorMultiplicador) - (metaPequena * fatorMultiplicador) - gastosPequenaSalario;
 
     return {
       gastosSalarioTotais,
@@ -341,7 +357,7 @@ export default function App() {
       rendaExtraPequena,
       gastosPorCategoria
     };
-  }, [transacoes, transacoesDoMes, perfis, filtroPessoa]);
+  }, [transacoes, transacoesDashboardAtivas, perfis, filtroPessoa, modoVisualizacaoDashboard]);
 
   const handleSalvarTransacao = async (e) => {
     e.preventDefault();
@@ -618,10 +634,29 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
-          <input 
-            type="month" value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)}
-            className={`text-sm px-3 py-1.5 rounded-lg border font-medium ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-          />
+          {abaAtiva === 'dashboard' ? (
+            modoVisualizacaoDashboard === 'mes' ? (
+              <input 
+                type="month" value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)}
+                className={`text-sm px-3 py-1.5 rounded-lg border font-medium ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+              />
+            ) : (
+              <select 
+                value={anoFiltro} onChange={(e) => setAnoFiltro(e.target.value)}
+                className={`text-sm px-3 py-1.5 rounded-lg border font-medium ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+              >
+                <option value="2025">Ano 2025</option>
+                <option value="2026">Ano 2026</option>
+                <option value="2027">Ano 2027</option>
+              </select>
+            )
+          ) : (
+            <input 
+              type="month" value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)}
+              className={`text-sm px-3 py-1.5 rounded-lg border font-medium ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+            />
+          )}
+
           <button onClick={alternarTema} className={`p-2 rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-yellow-400' : 'bg-slate-100 border-slate-300 text-slate-600'}`} title={modoEscuro ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}>
             {modoEscuro ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
@@ -684,9 +719,39 @@ export default function App() {
 
         {abaAtiva === 'dashboard' && (
           <div className="space-y-6">
+            {/* Seletor de Modo de Visualização (Mês vs. Ano) */}
+            <div className="flex items-center justify-between bg-slate-200 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-300 dark:border-slate-700">
+              <div className="flex items-center gap-2 px-2">
+                <Calendar className="w-4 h-4 text-cyan-500"/>
+                <span className="text-xs font-bold">Período de Análise do Dashboard:</span>
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setModoVisualizacaoDashboard('mes')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    modoVisualizacaoDashboard === 'mes'
+                      ? 'bg-cyan-600 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Visão Mensal ({mesFiltro})
+                </button>
+                <button
+                  onClick={() => setModoVisualizacaoDashboard('ano')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    modoVisualizacaoDashboard === 'ano'
+                      ? 'bg-cyan-600 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Visão Anual ({anoFiltro})
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
-                <p className="text-xs text-slate-500 font-medium">Gastos Totais (Dinheiro)</p>
+                <p className="text-xs text-slate-500 font-medium">Gastos Totais ({modoVisualizacaoDashboard === 'mes' ? 'Mês' : 'Ano'})</p>
                 <p className="text-xl font-bold mt-1">R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-amber-500`}>
@@ -711,8 +776,8 @@ export default function App() {
                     <PiggyBank className="w-6 h-6"/>
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm">Reserva / Investimentos Realizados ({mesFiltro})</h3>
-                    <p className="text-xs text-slate-400">Total guardado via aportes + renda extra de serviços.</p>
+                    <h3 className="font-bold text-sm">Reserva / Investimentos Realizados ({modoVisualizacaoDashboard === 'mes' ? mesFiltro : `Ano ${anoFiltro}`})</h3>
+                    <p className="text-xs text-slate-400">Total guardado via aportes + renda extra de serviços no período.</p>
                   </div>
                 </div>
                 <div className="flex gap-4 text-right">
@@ -746,7 +811,7 @@ export default function App() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <PieChart className="w-5 h-5 text-cyan-500"/>
-                  <h3 className="font-bold text-base">Distribuição Percentual de Gastos por Categoria ({mesFiltro})</h3>
+                  <h3 className="font-bold text-base">Distribuição Percentual de Gastos por Categoria ({modoVisualizacaoDashboard === 'mes' ? mesFiltro : `Ano ${anoFiltro}`})</h3>
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-500">
                   Total: R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -754,7 +819,7 @@ export default function App() {
               </div>
 
               {Object.keys(calculos.gastosPorCategoria).length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum gasto registrado para este mês com o filtro selecionado.</p>
+                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum gasto registrado para este período com o filtro selecionado.</p>
               ) : (
                 <div className="space-y-4">
                   <div className="w-full bg-slate-200 dark:bg-slate-700 h-4 rounded-full overflow-hidden flex shadow-inner">
