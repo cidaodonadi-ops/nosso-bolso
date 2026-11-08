@@ -117,10 +117,10 @@ export default function App() {
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
-    modoValor: 'dividir',
+    modoValor: 'fixo', // Padrão agora é 'fixo' para facilitar previsões como Luz, Água, Aluguel
     categoria: CATEGORIAS_PADRAO[0],
     pagador: 'pequeno',
-    tipoDivisao: 'individual',
+    tipoDivisao: '50/50', // Padrão inteligente 50/50 para contas da casa
     meioPagamento: 'salario',
     parcelas: 1,
     eAutofinanciamento: false,
@@ -277,7 +277,6 @@ export default function App() {
   }, [transacoes, filtroPessoa]);
 
   const calculos = useMemo(() => {
-    let gastosSalarioTotais = 0;
     let gastosPequenoSalario = 0;
     let gastosPequenaSalario = 0;
     let totalAutofinanciamentoMes = 0;
@@ -338,13 +337,32 @@ export default function App() {
         if (t.pagador === 'pequena') rendaExtraPequena += valorOriginal;
       }
 
-      // Se for 50/50, o peso real no orçamento de quem pagou é apenas a metade (o restante é reembolso)
-      let valorParaOrcamento = valorOriginal;
+      // Cálculo rigoroso do peso de cada gasto no orçamento pessoal de cada um
+      let pesoNoOrcamentoPequeno = 0;
+      let pesoNoOrcamentoPequena = 0;
+
       if (t.tipoDivisao === '50/50') {
-        valorParaOrcamento = arredondar2(valorOriginal / 2);
+        pesoNoOrcamentoPequeno = arredondar2(valorOriginal / 2);
+        pesoNoOrcamentoPequena = arredondar2(valorOriginal / 2);
+      } else {
+        if (t.pagador === 'pequeno') pesoNoOrcamentoPequeno = valorOriginal;
+        if (t.pagador === 'pequena') pesoNoOrcamentoPequena = valorOriginal;
       }
 
-      gastosPorCategoria[cat] = arredondar2((gastosPorCategoria[cat] || 0) + valorParaOrcamento);
+      // Se o filtro de pessoa for individual, considera apenas a parte daquela pessoa no orçamento
+      let valorParaGraficoEstatisticas = 0;
+      if (filtroPessoa === 'pequeno') {
+        valorParaGraficoEstatisticas = pesoNoOrcamentoPequeno;
+      } else if (filtroPessoa === 'pequena') {
+        valorParaGraficoEstatisticas = pesoNoOrcamentoPequena;
+      } else {
+        // Visão Casal: soma a parte de ambos para o total geral de gastos da casa
+        valorParaGraficoEstatisticas = arredondar2(pesoNoOrcamentoPequeno + pesoNoOrcamentoPequena);
+      }
+
+      if (valorParaGraficoEstatisticas > 0) {
+        gastosPorCategoria[cat] = arredondar2((gastosPorCategoria[cat] || 0) + valorParaGraficoEstatisticas);
+      }
 
       if (
         cat.toLowerCase().includes('mercado') || 
@@ -352,19 +370,12 @@ export default function App() {
         cat.toLowerCase().includes('delivery') ||
         cat.toLowerCase().includes('va')
       ) {
-        totalAlimentacaoConsolidado += valorParaOrcamento;
+        totalAlimentacaoConsolidado += valorParaGraficoEstatisticas;
       }
 
-      if (t.meioPagamento === 'va') return;
-
-      gastosSalarioTotais += valorParaOrcamento;
-
-      if (t.tipoDivisao === '50/50') {
-        gastosPequenoSalario += arredondar2(valorOriginal / 2);
-        gastosPequenaSalario += arredondar2(valorOriginal / 2);
-      } else {
-        if (t.pagador === 'pequeno') gastosPequenoSalario += valorOriginal;
-        if (t.pagador === 'pequena') gastosPequenaSalario += valorOriginal;
+      if (t.meioPagamento !== 'va') {
+        gastosPequenoSalario += pesoNoOrcamentoPequeno;
+        gastosPequenaSalario += pesoNoOrcamentoPequena;
       }
     });
 
@@ -377,6 +388,12 @@ export default function App() {
 
     const orcamentoLivrePequeno = arredondar2((salarioPequeno * fatorMultiplicador) - (metaPequeno * fatorMultiplicador) - gastosPequenoSalario);
     const orcamentoLivrePequena = arredondar2((salarioPequena * fatorMultiplicador) - (metaPequena * fatorMultiplicador) - gastosPequenaSalario);
+
+    // Gastos totais exibidos no dashboard respeitam o filtro ativo (Casal, Pequeno ou Pequena)
+    let gastosSalarioTotais = 0;
+    if (filtroPessoa === 'pequeno') gastosSalarioTotais = gastosPequenoSalario;
+    else if (filtroPessoa === 'pequena') gastosSalarioTotais = gastosPequenaSalario;
+    else gastosSalarioTotais = arredondar2(gastosPequenoSalario + gastosPequenaSalario);
 
     const totalGasto5050Mes = arredondar2(totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50);
     const parteIdealCadaUm = arredondar2(totalGasto5050Mes / 2);
@@ -463,6 +480,7 @@ export default function App() {
     } else {
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
       
+      // Se for modo 'fixo', o valor digitado é exatamente o valor de cada mês. Se for 'dividir', divide o total pelas parcelas.
       const valorParcela = form.modoValor === 'fixo' 
         ? valorNumerico 
         : arredondar2(valorNumerico / numParcelas);
@@ -511,10 +529,10 @@ export default function App() {
     setForm({
       descricao: '',
       valor: '',
-      modoValor: 'dividir',
+      modoValor: 'fixo',
       categoria: categoriasOrdenadas[0] || '',
       pagador: pagadorSugerido,
-      tipoDivisao: 'individual',
+      tipoDivisao: '50/50',
       meioPagamento: 'salario',
       parcelas: 1,
       eAutofinanciamento: false,
@@ -530,7 +548,7 @@ export default function App() {
     setForm({
       descricao: descLimpa,
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
-      modoValor: 'dividir',
+      modoValor: 'fixo',
       categoria: t.categoria,
       pagador: t.pagador || pagadorSugerido,
       tipoDivisao: t.tipoDivisao || 'individual',
@@ -547,10 +565,10 @@ export default function App() {
     setForm({
       descricao: '',
       valor: '',
-      modoValor: 'dividir',
+      modoValor: 'fixo',
       categoria: categoriasOrdenadas[0] || '',
       pagador: pagadorSugerido,
-      tipoDivisao: 'individual',
+      tipoDivisao: '50/50',
       meioPagamento: 'salario',
       parcelas: 1,
       eAutofinanciamento: false,
@@ -1169,26 +1187,26 @@ export default function App() {
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição (ex: Energia CPFL)"
+                  type="text" required placeholder="Descrição (ex: Energia CPFL ou Aluguel)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
                 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-slate-400 block mb-1">Cálculo do Valor</label>
+                    <label className="text-xs text-slate-400 block mb-1">Como informar o valor?</label>
                     <select
-                      value={form.modoValor || 'dividir'}
+                      value={form.modoValor}
                       onChange={(e) => setForm({...form, modoValor: e.target.value})}
                       className={`w-full px-3 py-2 text-sm rounded-lg border font-semibold ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     >
-                      <option value="dividir">Dividir Total em X</option>
-                      <option value="fixo">Valor Fixo p/ Mês</option>
+                      <option value="fixo">Valor Fixo Mensal</option>
+                      <option value="dividir">Valor Total (Dividir)</option>
                     </select>
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 block mb-1">
-                      {form.modoValor === 'fixo' ? 'Valor da Parcela (R$)' : 'Valor Total (R$)'}
+                      {form.modoValor === 'fixo' ? 'Valor p/ Mês (R$)' : 'Valor Total (R$)'}
                     </label>
                     <input 
                       type="text" required placeholder="0,00"
@@ -1203,7 +1221,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Mês da Fatura / Competência</label>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1">Mês de Competência</label>
                   <input 
                     type="month"
                     value={form.mesCompetencia}
@@ -1236,19 +1254,21 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 block mb-1">Entra na Devolução?</label>
+                    <label className="text-xs text-slate-400 block mb-1">Divisão</label>
                     <select
                       value={form.tipoDivisao} onChange={(e) => setForm({...form, tipoDivisao: e.target.value})}
                       className={`w-full px-3 py-2 text-sm rounded-lg border font-semibold ${form.tipoDivisao === '50/50' ? 'border-amber-500 text-amber-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     >
+                      <option value="50/50">Dividir 50/50 (Casa)</option>
                       <option value="individual">Individual (100%)</option>
-                      <option value="50/50">Devolução / Reembolso (50/50)</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">Nº de Meses / Parcelas</label>
+                  <label className="text-xs text-slate-400 block mb-1">
+                    {form.modoValor === 'fixo' ? 'Repetir por quantos meses?' : 'Quantidade de Parcelas'}
+                  </label>
                   <input 
                     type="number" min="1" max="48" disabled={editandoTransacao !== null}
                     value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
