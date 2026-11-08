@@ -61,7 +61,6 @@ const parseMoedaInput = (valorFormatado) => {
   return limpo;
 };
 
-// Arredonda rigorosamente para 2 casas decimais para evitar imprecisões de ponto flutuante
 const arredondar2 = (valor) => {
   return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
 };
@@ -108,7 +107,6 @@ export default function App() {
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
 
-  // Determina o pagador padrão baseado no usuário logado (ex: se o email contiver 'pequena' ou configurável, ajusta; senão assume 'pequeno')
   const pagadorSugerido = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
     const emailStr = usuario.email.toLowerCase();
@@ -119,6 +117,7 @@ export default function App() {
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
+    modoValor: 'dividir', // 'dividir' (Divide pelo nº de parcelas) ou 'fixo' (Aplica o valor fixo a cada mês)
     categoria: CATEGORIAS_PADRAO[0],
     pagador: 'pequeno',
     tipoDivisao: 'individual',
@@ -129,7 +128,6 @@ export default function App() {
     mesCompetencia: '2026-11'
   });
 
-  // Atualiza o pagador do form com a sugestão do usuário logado ao carregar
   useEffect(() => {
     if (usuario && !editandoTransacao) {
       setForm(prev => ({ ...prev, pagador: pagadorSugerido }));
@@ -458,7 +456,11 @@ export default function App() {
       setEditandoTransacao(null);
     } else {
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
-      const valorParcela = arredondar2(valorNumerico / numParcelas);
+      
+      // Lógica do Modo de Valor: Se for 'fixo', o valor da parcela é o próprio valor digitado; se for 'dividir', faz a divisão pelo nº de parcelas.
+      const valorParcela = form.modoValor === 'fixo' 
+        ? valorNumerico 
+        : arredondar2(valorNumerico / numParcelas);
 
       const [anoBase, mesBase] = form.mesCompetencia.split('-').map(Number);
       const novasTransacoes = [];
@@ -504,6 +506,7 @@ export default function App() {
     setForm({
       descricao: '',
       valor: '',
+      modoValor: 'dividir',
       categoria: categoriasOrdenadas[0] || '',
       pagador: pagadorSugerido,
       tipoDivisao: 'individual',
@@ -522,6 +525,7 @@ export default function App() {
     setForm({
       descricao: descLimpa,
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
+      modoValor: 'dividir',
       categoria: t.categoria,
       pagador: t.pagador || pagadorSugerido,
       tipoDivisao: t.tipoDivisao || 'individual',
@@ -538,6 +542,7 @@ export default function App() {
     setForm({
       descricao: '',
       valor: '',
+      modoValor: 'dividir',
       categoria: categoriasOrdenadas[0] || '',
       pagador: pagadorSugerido,
       tipoDivisao: 'individual',
@@ -1159,22 +1164,37 @@ export default function App() {
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição (ex: Manutenção Fiat Mobi)"
+                  type="text" required placeholder="Descrição (ex: Energia CPFL)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
                 
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Valor Total (R$)</label>
-                  <input 
-                    type="text" required placeholder="0,00"
-                    value={form.valor} 
-                    onChange={(e) => {
-                      const formatado = formatarMoedaInput(e.target.value);
-                      setForm({...form, valor: formatado});
-                    }}
-                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Cálculo do Valor</label>
+                    <select
+                      value={form.modoValor || 'dividir'}
+                      onChange={(e) => setForm({...form, modoValor: e.target.value})}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border font-semibold ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    >
+                      <option value="dividir">Dividir Total em X</option>
+                      <option value="fixo">Valor Fixo p/ Mês</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">
+                      {form.modoValor === 'fixo' ? 'Valor da Parcela (R$)' : 'Valor Total (R$)'}
+                    </label>
+                    <input 
+                      type="text" required placeholder="0,00"
+                      value={form.valor} 
+                      onChange={(e) => {
+                        const formatado = formatarMoedaInput(e.target.value);
+                        setForm({...form, valor: formatado});
+                      }}
+                      className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1223,7 +1243,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">Parcelas</label>
+                  <label className="text-xs text-slate-400 block mb-1">Nº de Meses / Parcelas</label>
                   <input 
                     type="number" min="1" max="48" disabled={editandoTransacao !== null}
                     value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
