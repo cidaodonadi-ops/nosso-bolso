@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="appGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+  </defs>
+  <!-- Fundo com cantos arredondados -->
+  <rect width="64" height="64" rx="16" fill="#0f172a" />
+  <!-- Ícone com Gradiente da Identidade Visual -->
+  <rect x="8" y="8" width="48" height="48" rx="12" fill="url(#appGradient)" />
+  <path d="M32 16L34.5 25.5L44 28L34.5 30.5L32 40L29.5 30.5L20 28L29.5 25.5Z" fill="#ffffff" />
+  <path d="M42 38L43.2 42.8L48 44L43.2 45.2L42 50L40.8 45.2L36 44L40.8 42.8Z" fill="#ffffff" opacity="0.8" />
+</svg>
