@@ -9,12 +9,12 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY_AQUI",
-  authDomain: "seu-projeto.firebaseapp.com",
-  projectId: "seu-projeto",
-  storageBucket: "seu-projeto.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcde"
+  apiKey: "AIzaSyDeo0qlg76LOaUGMbqVwNZqLRURc1Qie5o",
+  authDomain: "nosso-bolso-efd5a.firebaseapp.com",
+  projectId: "nosso-bolso-efd5a",
+  storageBucket: "nosso-bolso-efd5a.firebasestorage.app",
+  messagingSenderId: "869567181107",
+  appId: "1:869567181107:web:f4d1da08c2c766489ece46"
 };
 
 let app, auth, db;
