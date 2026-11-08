@@ -102,7 +102,7 @@ export default function App() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  const [mesFiltro, setMesFiltro] = useState('2026-11');
+  const [mesFiltro, setMesFiltro] = useState('2026-12');
   const [anoFiltro, setAnoFiltro] = useState('2026');
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
@@ -117,7 +117,7 @@ export default function App() {
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
-    modoValor: 'dividir', // 'dividir' (Divide pelo nº de parcelas) ou 'fixo' (Aplica o valor fixo a cada mês)
+    modoValor: 'dividir',
     categoria: CATEGORIAS_PADRAO[0],
     pagador: 'pequeno',
     tipoDivisao: 'individual',
@@ -125,7 +125,7 @@ export default function App() {
     parcelas: 1,
     eAutofinanciamento: false,
     eReceita: false,
-    mesCompetencia: '2026-11'
+    mesCompetencia: '2026-12'
   });
 
   useEffect(() => {
@@ -319,26 +319,32 @@ export default function App() {
 
     transacoesDashboardAtivas.forEach(t => {
       if (t.eReceita) return;
-      const valor = arredondar2(t.valor);
+      const valorOriginal = arredondar2(t.valor);
       const cat = t.categoria || 'Outros';
 
       if (t.eAutofinanciamento) {
-        totalAutofinanciamentoMes += valor;
+        totalAutofinanciamentoMes += valorOriginal;
       }
 
       if (cat.toLowerCase().includes('investimento') || cat.toLowerCase().includes('aporte')) {
-        totalInvestidoMes += valor;
-        if (t.pagador === 'pequeno') investidoPequeno += valor;
-        if (t.pagador === 'pequena') investidoPequena += valor;
+        totalInvestidoMes += valorOriginal;
+        if (t.pagador === 'pequeno') investidoPequeno += valorOriginal;
+        if (t.pagador === 'pequena') investidoPequena += valorOriginal;
       }
 
       if (cat.toLowerCase().includes('renda extra') || cat.toLowerCase().includes('serviços')) {
-        totalRendaExtraMes += valor;
-        if (t.pagador === 'pequeno') rendaExtraPequeno += valor;
-        if (t.pagador === 'pequena') rendaExtraPequena += valor;
+        totalRendaExtraMes += valorOriginal;
+        if (t.pagador === 'pequeno') rendaExtraPequeno += valorOriginal;
+        if (t.pagador === 'pequena') rendaExtraPequena += valorOriginal;
       }
 
-      gastosPorCategoria[cat] = arredondar2((gastosPorCategoria[cat] || 0) + valor);
+      // Se for 50/50, o peso real no orçamento de quem pagou é apenas a metade (o restante é reembolso)
+      let valorParaOrcamento = valorOriginal;
+      if (t.tipoDivisao === '50/50') {
+        valorParaOrcamento = arredondar2(valorOriginal / 2);
+      }
+
+      gastosPorCategoria[cat] = arredondar2((gastosPorCategoria[cat] || 0) + valorParaOrcamento);
 
       if (
         cat.toLowerCase().includes('mercado') || 
@@ -346,19 +352,19 @@ export default function App() {
         cat.toLowerCase().includes('delivery') ||
         cat.toLowerCase().includes('va')
       ) {
-        totalAlimentacaoConsolidado += valor;
+        totalAlimentacaoConsolidado += valorParaOrcamento;
       }
 
       if (t.meioPagamento === 'va') return;
 
-      gastosSalarioTotais += valor;
+      gastosSalarioTotais += valorParaOrcamento;
 
       if (t.tipoDivisao === '50/50') {
-        gastosPequenoSalario += arredondar2(valor / 2);
-        gastosPequenaSalario += arredondar2(valor / 2);
+        gastosPequenoSalario += arredondar2(valorOriginal / 2);
+        gastosPequenaSalario += arredondar2(valorOriginal / 2);
       } else {
-        if (t.pagador === 'pequeno') gastosPequenoSalario += valor;
-        if (t.pagador === 'pequena') gastosPequenaSalario += valor;
+        if (t.pagador === 'pequeno') gastosPequenoSalario += valorOriginal;
+        if (t.pagador === 'pequena') gastosPequenaSalario += valorOriginal;
       }
     });
 
@@ -457,7 +463,6 @@ export default function App() {
     } else {
       const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
       
-      // Lógica do Modo de Valor: Se for 'fixo', o valor da parcela é o próprio valor digitado; se for 'dividir', faz a divisão pelo nº de parcelas.
       const valorParcela = form.modoValor === 'fixo' 
         ? valorNumerico 
         : arredondar2(valorNumerico / numParcelas);
