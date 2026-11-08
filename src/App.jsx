@@ -73,9 +73,17 @@ export default function App() {
     pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
 
+  // Garante que a categoria "Investimentos / Aportes" já nasça nas categorias padrão/locais
   const [categorias, setCategorias] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_categorias');
-    return salvo ? JSON.parse(salvo) : CATEGORIAS_PADRAO;
+    if (salvo) {
+      const listaSalva = JSON.parse(salvo);
+      if (!listaSalva.includes('Investimentos / Aportes')) {
+        listaSalva.push('Investimentos / Aportes');
+      }
+      return listaSalva;
+    }
+    return CATEGORIAS_PADRAO;
   });
 
   const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
@@ -149,8 +157,12 @@ export default function App() {
           const dados = configDoc.data();
           if (dados.perfis) setPerfis(dados.perfis);
           if (dados.categorias && Array.isArray(dados.categorias)) {
-            setCategorias(dados.categorias);
-            localStorage.setItem('nossobolso_categorias', JSON.stringify(dados.categorias));
+            let catNuvem = dados.categorias;
+            if (!catNuvem.includes('Investimentos / Aportes')) {
+              catNuvem.push('Investimentos / Aportes');
+            }
+            setCategorias(catNuvem);
+            localStorage.setItem('nossobolso_categorias', JSON.stringify(catNuvem));
           }
         }
       } catch (e) {
@@ -266,7 +278,6 @@ export default function App() {
         totalAutofinanciamentoMes += valor;
       }
 
-      // Identificar Investimentos / Aportes
       if (cat.toLowerCase().includes('investimento') || cat.toLowerCase().includes('aporte')) {
         totalInvestidoMes += valor;
         if (t.pagador === 'pequeno') investidoPequeno += valor;
@@ -677,33 +688,62 @@ export default function App() {
               </div>
             </div>
 
+            {/* Gráfico Visual Percentual de Categorias */}
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
-              <div className="flex items-center gap-2 mb-2">
-                <PieChart className="w-5 h-5 text-cyan-500"/>
-                <h3 className="font-bold text-base">Distribuição de Gastos por Categoria ({mesFiltro})</h3>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <PieChart className="w-5 h-5 text-cyan-500"/>
+                  <h3 className="font-bold text-base">Distribuição Percentual de Gastos por Categoria ({mesFiltro})</h3>
+                </div>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-500">
+                  Total: R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               {Object.keys(calculos.gastosPorCategoria).length === 0 ? (
                 <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum gasto registrado para este mês com o filtro selecionado.</p>
               ) : (
-                <div className="space-y-3">
-                  {Object.entries(calculos.gastosPorCategoria).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR')).map(([cat, val]) => {
-                    const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
-                    return (
-                      <div key={cat} className="space-y-1">
-                        <div className="flex justify-between text-xs font-semibold">
-                          <span>{cat}</span>
-                          <span>R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <div className="space-y-4">
+                  {/* Barra Gráfica Segmentada Proporcional */}
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 h-4 rounded-full overflow-hidden flex shadow-inner">
+                    {Object.entries(calculos.gastosPorCategoria).map(([cat, val], idx) => {
+                      const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
+                      if (porcentagem <= 0) return null;
+                      const cores = [
+                        'bg-cyan-500', 'bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 
+                        'bg-pink-500', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 
+                        'bg-teal-500', 'bg-violet-500', 'bg-fuchsia-500'
+                      ];
+                      const corClasse = cores[idx % cores.length];
+                      return (
+                        <div 
+                          key={cat}
+                          className={`${corClasse} h-full transition-all duration-500 hover:opacity-90`}
+                          style={{ width: `${porcentagem}%` }}
+                          title={`${cat}: R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${porcentagem.toFixed(1)}%)`}
+                        ></div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Lista Detalhada com Percentuais */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    {Object.entries(calculos.gastosPorCategoria).sort((a, b) => b[1] - a[1]).map(([cat, val], idx) => {
+                      const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
+                      return (
+                        <div key={cat} className={`p-3 rounded-xl border flex items-center justify-between ${modoEscuro ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block" style={{ opacity: Math.max(0.4, 1 - (idx * 0.05)) }}></span>
+                            <span className="text-xs font-semibold">{cat}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-bold block">R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-[10px] text-cyan-500 font-semibold">{porcentagem.toFixed(1)}% do total</span>
+                          </div>
                         </div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-                          <div 
-                            className="bg-gradient-to-r from-cyan-500 to-blue-600 h-2.5 rounded-full transition-all duration-500" 
-                            style={{ width: `${Math.min(porcentagem, 100)}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
