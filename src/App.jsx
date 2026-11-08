@@ -26,7 +26,7 @@ try {
   console.log("Modo offline/demonstração ativado");
 }
 
-const CATEGORIAS_INICIAIS = [
+const CATEGORIAS_PADRAO = [
   'Moradia (Aluguel/Condomínio)',
   'Mercado & Casa (Salário)',
   'Mercado & Casa (VA)',
@@ -72,7 +72,15 @@ export default function App() {
     pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
 
-  const [categorias, setCategorias] = useState(CATEGORIAS_INICIAIS);
+  // Carrega categorias salvas no localStorage ou usa o padrão
+  const [categorias, setCategorias] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_categorias');
+    if (salvo) {
+      try { return JSON.parse(salvo); } catch (e) { return CATEGORIAS_PADRAO; }
+    }
+    return CATEGORIAS_PADRAO;
+  });
+
   const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
   const [transacoes, setTransacoes] = useState([]);
 
@@ -85,7 +93,7 @@ export default function App() {
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
-    categoria: CATEGORIAS_INICIAIS[0],
+    categoria: CATEGORIAS_PADRAO[0],
     pagador: 'pequeno',
     tipoDivisao: '50/50',
     meioPagamento: 'salario',
@@ -94,6 +102,11 @@ export default function App() {
     eReceita: false,
     mesCompetencia: '2026-11'
   });
+
+  // Salva categorias no localStorage sempre que houver alteração
+  useEffect(() => {
+    localStorage.setItem('nossobolso_categorias', JSON.stringify(categorias));
+  }, [categorias]);
 
   // Categorias sempre ordenadas alfabeticamente
   const categoriasOrdenadas = useMemo(() => {
@@ -633,6 +646,8 @@ export default function App() {
 
             <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <h2 className="text-lg font-bold">Classes / Categorias de Gastos (Ordem Alfabética)</h2>
+              <p className="text-xs text-slate-400">As alterações realizadas aqui ficam salvas automaticamente no dispositivo.</p>
+              
               <form onSubmit={adicionarCategoria} className="flex gap-2">
                 <input 
                   type="text" placeholder="Nome da nova categoria..."
