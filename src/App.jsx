@@ -448,4 +448,195 @@ export default function App() {
           </div>
         )}
 
-        {abaAtiva === 'vi
+        {abaAtiva === 'viagens' && (
+          <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md`}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                <Plane className="w-6 h-6"/>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">Caixinha de Viagem / Férias</h2>
+                <p className="text-xs text-slate-400">Acúmulo de reservas para viagens e 13º/férias.</p>
+              </div>
+            </div>
+            <p className="text-xl font-bold text-emerald-600 mt-4">Total Acumulado: R$ {calculos.caixinhaViagens.toFixed(2)}</p>
+          </div>
+        )}
+
+        {abaAtiva === 'config' && (
+          <div className="space-y-6">
+            <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Settings className="w-5 h-5 text-blue-500"/> Parâmetros de Salários e VA
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/30 space-y-3">
+                  <h3 className="font-bold text-blue-600 text-sm">Perfil Pequeno</h3>
+                  <div>
+                    <label className="text-xs text-slate-500 block">Salário (R$)</label>
+                    <input 
+                      type="number" value={perfis.pequeno.salario}
+                      onChange={(e) => setPerfis({...perfis, pequeno: {...perfis.pequeno, salario: e.target.value}})}
+                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block">VA (R$)</label>
+                    <input 
+                      type="number" value={perfis.pequeno.va}
+                      onChange={(e) => setPerfis({...perfis, pequeno: {...perfis.pequeno, va: e.target.value}})}
+                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block">Meta de Investimento / Reserva (R$)</label>
+                    <input 
+                      type="number" value={perfis.pequeno.metaInvestimento}
+                      onChange={(e) => setPerfis({...perfis, pequeno: {...perfis.pequeno, metaInvestimento: e.target.value}})}
+                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-pink-200 dark:border-pink-900 bg-pink-50/30 space-y-3">
+                  <h3 className="font-bold text-pink-600 text-sm">Perfil Pequena</h3>
+                  <div>
+                    <label className="text-xs text-slate-500 block">Salário (R$)</label>
+                    <input 
+                      type="number" value={perfis.pequena.salario}
+                      onChange={(e) => setPerfis({...perfis, pequena: {...perfis.pequena, salario: e.target.value}})}
+                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block">VA (R$)</label>
+                    <input 
+                      type="number" value={perfis.pequena.va}
+                      onChange={(e) => setPerfis({...perfis, pequena: {...perfis.pequena, va: e.target.value}})}
+                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block">Meta de Investimento / Reserva (R$)</label>
+                    <input 
+                      type="number" value={perfis.pequena.metaInvestimento}
+                      onChange={(e) => setPerfis({...perfis, pequena: {...perfis.pequena, metaInvestimento: e.target.value}})}
+                      className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
+              <h2 className="text-lg font-bold">Classes / Categorias de Gastos</h2>
+              <form onSubmit={adicionarCategoria} className="flex gap-2">
+                <input 
+                  type="text" placeholder="Nome da nova categoria..."
+                  value={novaCategoriaInput} onChange={(e) => setNovaCategoriaInput(e.target.value)}
+                  className={`flex-1 px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                />
+                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                  Adicionar
+                </button>
+              </form>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4 max-h-60 overflow-y-auto">
+                {categorias.map(cat => (
+                  <div key={cat} className={`flex justify-between items-center p-2.5 rounded-lg border ${modoEscuro ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                    <span className="text-sm font-medium">{cat}</span>
+                    <button onClick={() => removerCategoria(cat)} className="text-slate-400 hover:text-rose-500 p-1">
+                      <Trash2 className="w-4 h-4"/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {abaAtiva === 'lancamentos' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm h-fit`}>
+              <h3 className="font-bold text-sm mb-4">Novo Gasto</h3>
+              <form onSubmit={handleAdicionarTransacao} className="space-y-3">
+                <input 
+                  type="text" required placeholder="Descrição do Gasto"
+                  value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
+                  className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                />
+                <input 
+                  type="number" step="0.01" required placeholder="Valor Total (R$)"
+                  value={form.valor} onChange={(e) => setForm({...form, valor: e.target.value})}
+                  className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                />
+                
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1">Categoria / Classe</label>
+                  <select
+                    value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})}
+                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                  >
+                    {categorias.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-900 flex items-center gap-2">
+                  <input 
+                    type="checkbox"
+                    id="chkAuto"
+                    checked={form.eAutofinanciamento}
+                    onChange={(e) => setForm({...form, eAutofinanciamento: e.target.checked})}
+                    className="w-4 h-4 text-indigo-600 rounded"
+                  />
+                  <label htmlFor="chkAuto" className="text-xs font-semibold text-indigo-900 dark:text-indigo-200 cursor-pointer">
+                    É Autofinanciamento? (Financiei de mim mesmo)
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={form.pagador} onChange={(e) => setForm({...form, pagador: e.target.value})}
+                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                  >
+                    <option value="pequeno">Pequeno</option>
+                    <option value="pequena">Pequena</option>
+                  </select>
+                  <input 
+                    type="number" min="1" max="48" placeholder="Parcelas"
+                    value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
+                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                  />
+                </div>
+                <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm">Salvar Lançamento</button>
+              </form>
+            </div>
+
+            <div className="md:col-span-2 space-y-3">
+              <h3 className="font-bold text-sm text-slate-500">Lançamentos de {mesFiltro}</h3>
+              {transacoesDoMes.map(t => (
+                <div key={t.id} className={`p-3 rounded-xl border ${t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                        {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
+                      <span className="font-semibold text-sm">{t.descricao}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-sm">R$ {Number(t.valor).toFixed(2)}</span>
+                    <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
