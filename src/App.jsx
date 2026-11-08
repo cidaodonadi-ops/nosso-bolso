@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle
+  PiggyBank, Plane, Wallet, Calculator, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Repeat, Sparkles, PieChart, Users, User, CheckCircle2, AlertCircle, Utensils
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -163,7 +163,6 @@ export default function App() {
   }, [usuario]);
 
   const salvarConfiguracoesNaNuvem = async (novosPerfis, novasCategorias) => {
-    // Salva localmente primeiro para garantir segurança instantânea
     localStorage.setItem('nossobolso_categorias', JSON.stringify(novasCategorias));
     
     if (db && usuario) {
@@ -182,7 +181,7 @@ export default function App() {
         console.error("Erro ao salvar na nuvem", err);
         setStatusAviso({
           tipo: 'erro',
-          mensagem: 'Ops! Falha ao sincronizar com a nuvem. Suas alterações foram salvas no aparelho.'
+          mensagem: 'Falha ao sincronizar com a nuvem. Suas alterações foram salvas no aparelho.'
         });
       }
     } else {
@@ -240,6 +239,7 @@ export default function App() {
     let gastosPequenaSalario = 0;
     let totalAutofinanciamentoMes = 0;
     let caixinhaViagens = 0;
+    let totalAlimentacaoConsolidado = 0;
     let gastosPorCategoria = {};
 
     transacoes.forEach(t => {
@@ -253,13 +253,23 @@ export default function App() {
     transacoesDoMes.forEach(t => {
       if (t.eReceita) return;
       const valor = Number(t.valor);
+      const cat = t.categoria || 'Outros';
 
       if (t.eAutofinanciamento) {
         totalAutofinanciamentoMes += valor;
       }
 
-      const cat = t.categoria || 'Outros';
       gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + valor;
+
+      // Soma consolidada de alimentação (Mercado Salário, Mercado VA e Alimentação/Delivery)
+      if (
+        cat.toLowerCase().includes('mercado') || 
+        cat.toLowerCase().includes('alimentação') || 
+        cat.toLowerCase().includes('delivery') ||
+        cat.toLowerCase().includes('va')
+      ) {
+        totalAlimentacaoConsolidado += valor;
+      }
 
       if (t.meioPagamento === 'va') return;
 
@@ -290,6 +300,7 @@ export default function App() {
       caixinhaViagens,
       orcamentoLivrePequeno,
       orcamentoLivrePequena,
+      totalAlimentacaoConsolidado,
       gastosPorCategoria
     };
   }, [transacoes, transacoesDoMes, perfis, filtroPessoa]);
@@ -547,18 +558,22 @@ export default function App() {
 
         {abaAtiva === 'dashboard' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
-                <p className="text-xs text-slate-500 font-medium">Gastos Totais do Mês</p>
-                <p className="text-2xl font-bold mt-1">R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-xs text-slate-500 font-medium">Gastos Totais (Dinheiro)</p>
+                <p className="text-xl font-bold mt-1">R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-amber-500`}>
+                <p className="text-xs text-amber-500 font-semibold flex items-center gap-1"><Utensils className="w-3.5 h-3.5"/> Total Alimentação</p>
+                <p className="text-xl font-bold mt-1">R$ {calculos.totalAlimentacaoConsolidado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-cyan-500`}>
                 <p className="text-xs text-cyan-500 font-semibold">Valor Livre Pequeno</p>
-                <p className="text-xl font-bold mt-1">R$ {calculos.orcamentoLivrePequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-lg font-bold mt-1">R$ {calculos.orcamentoLivrePequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm border-l-4 border-l-pink-500`}>
                 <p className="text-xs text-pink-500 font-semibold">Valor Livre Pequena</p>
-                <p className="text-xl font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-lg font-bold mt-1">R$ {calculos.orcamentoLivrePequena.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
 
@@ -578,7 +593,7 @@ export default function App() {
                       <div key={cat} className="space-y-1">
                         <div className="flex justify-between text-xs font-semibold">
                           <span>{cat}</span>
-                          <span>R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({porcentagem.toFixed(1)}%)</span>
+                          <span>R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                           <div 
@@ -650,7 +665,6 @@ export default function App() {
 
         {abaAtiva === 'config' && (
           <div className="space-y-6">
-            {/* Aviso Intuitivo de Sucesso ou Erro Amigável */}
             {statusAviso.mensagem && (
               <div className={`p-4 rounded-xl border text-xs flex items-center justify-between shadow-md ${
                 statusAviso.tipo === 'sucesso' 
@@ -872,7 +886,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}]{/* */}</span>
+                      <span className="font-bold text-sm">R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       <button onClick={() => removerTransacao(t.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
                     </div>
                   </div>
