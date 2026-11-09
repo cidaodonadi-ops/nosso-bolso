@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -87,7 +87,7 @@ const extrairDadosPorVoz = (texto, categorias) => {
     }
   }
 
-  let pagador = null;
+  let pagador = '';
   if (textoMinusculo.includes('pequena')) pagador = 'pequena';
   if (textoMinusculo.includes('pequeno')) pagador = 'pequeno';
 
@@ -173,50 +173,15 @@ export default function App() {
   const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
+  const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
 
-  // MAPEAMENTO DE E-MAILS POR PERFIL (Salvo em localStorage)
-  const [mapeamentoEmails, setMapeamentoEmails] = useState(() => {
-    const salvo = localStorage.getItem('nossobolso_mapeamento_emails');
-    return salvo ? JSON.parse(salvo) : {};
-  });
-
-  const pagadorSugerido = useMemo(() => {
-    if (!usuario || !usuario.email) return 'pequeno';
-    const emailStr = usuario.email.toLowerCase();
-
-    // 1. Verifica se este e-mail já foi explicitamente vinculado nas configurações
-    if (mapeamentoEmails[emailStr]) {
-      return mapeamentoEmails[emailStr];
-    }
-
-    // 2. Fallback inteligente por palavras-chave
-    if (emailStr.includes('pequena') || emailStr.includes('ana') || emailStr.includes('feminino')) {
-      return 'pequena';
-    }
-    return 'pequeno';
-  }, [usuario, mapeamentoEmails]);
-
-  const vincularEmailAoPerfil = (perfilAlvo) => {
-    if (!usuario || !usuario.email) return;
-    const emailStr = usuario.email.toLowerCase();
-    const novoMap = { ...mapeamentoEmails, [emailStr]: perfilAlvo };
-    setMapeamentoEmails(novoMap);
-    localStorage.setItem('nossobolso_mapeamento_emails', JSON.stringify(novoMap));
-    alert(`E-mail ${usuario.email} vinculado com sucesso ao perfil ${perfilAlvo === 'pequena' ? 'Pequena' : 'Pequeno'}!`);
-  };
-
-  const [atalhosPorPerfil, setAtalhosPorPerfil] = useState(() => {
-    const salvo = localStorage.getItem('nossobolso_atalhos_usuarios');
+  const [atalhosGerais, setAtalhosGerais] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_atalhos_gerais');
     if (salvo) return JSON.parse(salvo);
-    return {
-      pequeno: [...ATALHOS_INICIAIS_PADRAO],
-      pequena: [...ATALHOS_INICIAIS_PADRAO]
-    };
+    return [...ATALHOS_INICIAIS_PADRAO];
   });
-
   const [novoAtalhosLabel, setNovoAtalhosLabel] = useState('');
   const [mostrandoAddAtalho, setMostrandoAddAtalho] = useState(false);
-  const atalhosAtuais = atalhosPorPerfil[pagadorSugerido] || ATALHOS_INICIAIS_PADRAO;
 
   const adicionarAtalhoPessoal = (e) => {
     e.preventDefault();
@@ -228,35 +193,26 @@ export default function App() {
       categoria: form.categoria
     };
 
-    const atualizadosPerfil = [...atalhosAtuais, novoAtalho];
-    const novosPerfisAtalhos = {
-      ...atalhosPorPerfil,
-      [pagadorSugerido]: atualizadosPerfil
-    };
-
-    setAtalhosPorPerfil(novosPerfisAtalhos);
-    localStorage.setItem('nossobolso_atalhos_usuarios', JSON.stringify(novosPerfisAtalhos));
+    const atualizados = [...atalhosGerais, novoAtalho];
+    setAtalhosGerais(atualizados);
+    localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
     setNovoAtalhosLabel('');
     setMostrandoAddAtalho(false);
   };
 
   const removerAtalhoPessoal = (indexRemover) => {
-    const atualizadosPerfil = atalhosAtuais.filter((_, idx) => idx !== indexRemover);
-    const novosPerfisAtalhos = {
-      ...atalhosPorPerfil,
-      [pagadorSugerido]: atualizadosPerfil
-    };
-
-    setAtalhosPorPerfil(novosPerfisAtalhos);
-    localStorage.setItem('nossobolso_atalhos_usuarios', JSON.stringify(novosPerfisAtalhos));
+    const atualizados = atalhosGerais.filter((_, idx) => idx !== indexRemover);
+    setAtalhosGerais(atualizados);
+    localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
+  // FORMULÁRIO COM PAGADOR EM BRANCO POR PADRÃO
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
     categoria: CATEGORIAS_PADRAO[0],
-    pagador: pagadorSugerido,
+    pagador: '', // Em branco para seleção manual obrigatória
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
     parcelas: 1,
@@ -264,12 +220,6 @@ export default function App() {
     eReceita: false,
     mesCompetencia: '2026-11'
   });
-
-  useEffect(() => {
-    if (usuario && !editandoTransacao) {
-      setForm(prev => ({ ...prev, pagador: pagadorSugerido }));
-    }
-  }, [usuario, pagadorSugerido]);
 
   const alternarTema = () => {
     setModoEscuro(prev => {
@@ -641,6 +591,11 @@ export default function App() {
 
   const handleSalvarTransacao = async (e) => {
     e.preventDefault();
+    if (!form.pagador) {
+      alert("Por favor, selecione quem pagou a despesa.");
+      return;
+    }
+
     const valorNumerico = arredondar2(parseFloat(parseMoedaInput(form.valor)));
     if (!form.descricao || isNaN(valorNumerico)) return;
 
@@ -747,7 +702,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: categoriasOrdenadas[0] || '',
-      pagador: pagadorSugerido,
+      pagador: '', // Reseta para em branco
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
@@ -766,7 +721,7 @@ export default function App() {
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       modoValor: 'fixo',
       categoria: t.categoria,
-      pagador: t.pagador || pagadorSugerido,
+      pagador: t.pagador || '',
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
       parcelas: t.parcelas || 1,
@@ -783,7 +738,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: categoriasOrdenadas[0] || '',
-      pagador: pagadorSugerido,
+      pagador: '',
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       parcelas: 1,
@@ -980,7 +935,6 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-base sm:text-lg leading-tight tracking-tight">Nosso Bolso</h1>
-            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Logado como: <span className="font-semibold capitalize text-cyan-400">{pagadorSugerido}</span> ({usuario.email})</p>
           </div>
         </div>
 
@@ -1297,32 +1251,6 @@ export default function App() {
 
         {abaAtiva === 'config' && (
           <div className="space-y-6">
-            {/* NOVO: SEÇÃO DE VINCULAÇÃO DE E-MAIL AO PERFIL */}
-            <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
-              <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
-                <Users className="w-5 h-5 text-cyan-500"/> Vincular E-mail Logado ao Perfil
-              </h2>
-              <p className="text-xs text-slate-400">
-                O e-mail atual (<span className="text-cyan-400 font-semibold">{usuario?.email}</span>) está identificado como <strong className="capitalize text-cyan-300">{pagadorSugerido}</strong>. Se quiser fixar qual perfil este e-mail representa neste aparelho, clique abaixo:
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => vincularEmailAoPerfil('pequeno')}
-                  className={`py-2.5 rounded-lg text-xs font-bold border transition-all ${pagadorSugerido === 'pequeno' ? 'bg-cyan-600 text-white border-cyan-500 shadow-md' : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'}`}
-                >
-                  Vincular a Pequeno
-                </button>
-                <button
-                  type="button"
-                  onClick={() => vincularEmailAoPerfil('pequena')}
-                  className={`py-2.5 rounded-lg text-xs font-bold border transition-all ${pagadorSugerido === 'pequena' ? 'bg-pink-600 text-white border-pink-500 shadow-md' : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'}`}
-                >
-                  Vincular a Pequena
-                </button>
-              </div>
-            </div>
-
             <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
                 <KeyRound className="w-5 h-5 text-cyan-500"/> Alterar Senha da Conta
@@ -1505,7 +1433,7 @@ export default function App() {
                 <div className="space-y-2 pb-3 border-b border-slate-200 dark:border-slate-700">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-amber-400"/> Atalhos de <span className="capitalize text-cyan-400">{pagadorSugerido}</span>
+                      <Zap className="w-3 h-3 text-amber-400"/> Atalhos Rápidos
                     </span>
                     <button 
                       type="button" 
@@ -1530,7 +1458,7 @@ export default function App() {
                   )}
 
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {atalhosAtuais.map((atalho, index) => (
+                    {atalhosGerais.map((atalho, index) => (
                       <div key={index} className="group relative flex items-center">
                         <button
                           type="button"
@@ -1538,8 +1466,7 @@ export default function App() {
                             setForm(prev => ({
                               ...prev,
                               descricao: atalho.descricao,
-                              categoria: atalho.categoria,
-                              pagador: pagadorSugerido
+                              categoria: atalho.categoria
                             }));
                           }}
                           className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all border pr-5 ${
@@ -1607,7 +1534,7 @@ export default function App() {
                 </div>
                 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Categoria (ex: Vestuário)</label>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Categoria</label>
                   <select
                     value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})}
                     className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
@@ -1620,11 +1547,13 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] text-slate-400 block mb-1">Quem Pagou?</label>
+                    <label className="text-[11px] text-slate-400 block mb-1">Quem Pagou? *</label>
                     <select
+                      required
                       value={form.pagador} onChange={(e) => setForm({...form, pagador: e.target.value})}
-                      className={`w-full px-2 py-2 text-xs sm:text-sm rounded-lg border font-semibold ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      className={`w-full px-2 py-2 text-xs sm:text-sm rounded-lg border font-semibold ${!form.pagador ? 'border-amber-500 text-amber-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     >
+                      <option value="" disabled>Selecione...</option>
                       <option value="pequeno">Pequeno</option>
                       <option value="pequena">Pequena</option>
                     </select>
