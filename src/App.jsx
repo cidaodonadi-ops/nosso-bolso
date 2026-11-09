@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Coffee, Car, ShoppingBag, Beer
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -46,13 +46,11 @@ const CATEGORIAS_PADRAO = [
   'Outros'
 ];
 
-// Lista de atalhos rápidos pré-configurados (você pode alterar os nomes e categorias aqui)
-const ATALHOS_FREQUENTES = [
+const ATALHOS_INICIAIS_PADRAO = [
   { label: '☕ Café', descricao: 'Café', categoria: 'Alimentação / Delivery' },
   { label: '🥐 Padaria', descricao: 'Padaria', categoria: 'Alimentação / Delivery' },
-  { label: '🚗 Uber / Táxi', descricao: 'Uber', categoria: 'Carro' },
-  { label: '🛒 Mercado', descricao: 'Supermercado', categoria: 'Mercado & Casa (Salário)' },
-  { label: '🍕 Ifood / Delivery', descricao: 'Delivery', categoria: 'Alimentação / Delivery' }
+  { label: '🚗 Uber', descricao: 'Uber', categoria: 'Carro' },
+  { label: '🛒 Mercado', descricao: 'Supermercado', categoria: 'Mercado & Casa (Salário)' }
 ];
 
 const formatarMoedaInput = (valor) => {
@@ -143,9 +141,7 @@ export default function App() {
     return CATEGORIAS_PADRAO;
   });
 
-  const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
   const [transacoes, setTransacoes] = useState([]);
-
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [modoVisualizacaoDashboard, setModoVisualizacaoDashboard] = useState('mes');
   const [statusAviso, setStatusAviso] = useState({ tipo: '', mensagem: '' });
@@ -162,9 +158,9 @@ export default function App() {
   const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
-
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
 
+  // Identificação do pagador sugerido com base no e-mail logado
   const pagadorSugerido = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
     const emailStr = usuario.email.toLowerCase();
@@ -173,6 +169,55 @@ export default function App() {
     }
     return 'pequeno';
   }, [usuario]);
+
+  // Gerenciamento de Atalhos Separados por Perfil (Pequeno vs Pequena)
+  const [atalhosPorPerfil, setAtalhosPorPerfil] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_atalhos_usuarios');
+    if (salvo) return JSON.parse(salvo);
+    return {
+      pequeno: [...ATALHOS_INICIAIS_PADRAO],
+      pequena: [...ATALHOS_INICIAIS_PADRAO]
+    };
+  });
+
+  const [novoAtalhosLabel, setNovoAtalhosLabel] = useState('');
+  const [mostrandoAddAtalho, setMostrandoAddAtalho] = useState(false);
+
+  // Atalhos ativos para a pessoa logada no momento
+  const atalhosAtuais = atalhosPorPerfil[pagadorSugerido] || ATALHOS_INICIAIS_PADRAO;
+
+  const adicionarAtalhoPessoal = (e) => {
+    e.preventDefault();
+    if (!novoAtalhosLabel.trim()) return;
+
+    const novoAtalho = {
+      label: novoAtalhosLabel.trim(),
+      descricao: novoAtalhosLabel.trim().replace(/^[^\w\s]+/, '').trim() || 'Gasto',
+      categoria: form.categoria
+    };
+
+    const atualizadosPerfil = [...atalhosAtuais, novoAtalho];
+    const novosPerfisAtalhos = {
+      ...atalhosPorPerfil,
+      [pagadorSugerido]: atualizadosPerfil
+    };
+
+    setAtalhosPorPerfil(novosPerfisAtalhos);
+    localStorage.setItem('nossobolso_atalhos_usuarios', JSON.stringify(novosPerfisAtalhos));
+    setNovoAtalhosLabel('');
+    setMostrandoAddAtalho(false);
+  };
+
+  const removerAtalhoPessoal = (indexRemover) => {
+    const atualizadosPerfil = atalhosAtuais.filter((_, idx) => idx !== indexRemover);
+    const novosPerfisAtalhos = {
+      ...atalhosPorPerfil,
+      [pagadorSugerido]: atualizadosPerfil
+    };
+
+    setAtalhosPorPerfil(novosPerfisAtalhos);
+    localStorage.setItem('nossobolso_atalhos_usuarios', JSON.stringify(novosPerfisAtalhos));
+  };
 
   const [form, setForm] = useState({
     descricao: '',
@@ -1356,32 +1401,65 @@ export default function App() {
                 )}
               </div>
 
-              {/* SEÇÃO DE ATALHOS RÁPIDOS */}
+              {/* SEÇÃO DE ATALHOS RÁPIDOS SEPARADOS POR PERFIL */}
               {!editandoTransacao && (
-                <div className="space-y-1.5 pb-2 border-b border-slate-200 dark:border-slate-700">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                    <Zap className="w-3 h-3 text-amber-400"/> Atalhos Frequentes
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {ATALHOS_FREQUENTES.map((atalho, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => {
-                          setForm(prev => ({
-                            ...prev,
-                            descricao: atalho.descricao,
-                            categoria: atalho.categoria
-                          }));
-                        }}
-                        className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all border ${
-                          modoEscuro 
-                            ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-cyan-600 hover:border-cyan-500 hover:text-white' 
-                            : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-cyan-500 hover:text-white'
-                        }`}
-                      >
-                        {atalho.label}
+                <div className="space-y-2 pb-3 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-amber-400"/> Atalhos de <span className="capitalize text-cyan-400">{pagadorSugerido}</span>
+                    </span>
+                    <button 
+                      type="button" 
+                      onClick={() => setMostrandoAddAtalho(prev => !prev)}
+                      className="text-[11px] text-cyan-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <Plus className="w-3 h-3"/> {mostrandoAddAtalho ? 'Fechar' : 'Novo Atalho'}
+                    </button>
+                  </div>
+
+                  {mostrandoAddAtalho && (
+                    <form onSubmit={adicionarAtalhoPessoal} className="flex gap-1.5 pt-1">
+                      <input 
+                        type="text" placeholder="Ex: 💅 Manicure ou 🍔 Lanche"
+                        value={novoAtalhosLabel} onChange={(e) => setNovoAtalhosLabel(e.target.value)}
+                        className={`flex-1 px-2.5 py-1.5 text-xs rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      />
+                      <button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold">
+                        Salvar
                       </button>
+                    </form>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {atalhosAtuais.map((atalho, index) => (
+                      <div key={index} className="group relative flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm(prev => ({
+                              ...prev,
+                              descricao: atalho.descricao,
+                              categoria: atalho.categoria,
+                              pagador: pagadorSugerido
+                            }));
+                          }}
+                          className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all border pr-5 ${
+                            modoEscuro 
+                              ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-cyan-600 hover:border-cyan-500 hover:text-white' 
+                              : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-cyan-500 hover:text-white'
+                          }`}
+                        >
+                          {atalho.label}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removerAtalhoPessoal(index)}
+                          className="absolute right-1 text-slate-400 hover:text-rose-400 text-[10px] font-bold px-0.5"
+                          title="Remover atalho"
+                        >
+                          ×
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
