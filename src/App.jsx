@@ -87,6 +87,8 @@ const extrairDadosPorVoz = (texto, categorias) => {
   let tipoDivisao = 'individual';
   if (textoMinusculo.includes('dividir') || textoMinusculo.includes('50/50') || textoMinusculo.includes('meio a meio')) {
     tipoDivisao = '50/50';
+  } else if (textoMinusculo.includes('reembolso') || textoMinusculo.includes('devolver') || textoMinusculo.includes('adiantamento')) {
+    tipoDivisao = 'reembolso_integral';
   }
 
   let categoriaEncontrada = null;
@@ -398,6 +400,10 @@ export default function App() {
     let totalPagoPeloPequenoEm50_50 = 0;
     let totalPagoPelaPequenaEm50_50 = 0;
 
+    // Acumuladores para Reembolso Integral (Adiantamentos)
+    let reembolsoIntegralPequenoRecebe = 0; // Pequeno pagou para Pequena (Pequena deve devolver ao Pequeno)
+    let reembolsoIntegralPequenaRecebe = 0; // Pequena pagou para Pequeno (Pequeno deve devolver à Pequena)
+
     let gastosPorCategoria = {};
 
     transacoes.forEach(t => {
@@ -417,6 +423,14 @@ export default function App() {
           totalPagoPeloPequenoEm50_50 += valor;
         } else if (t.pagador === 'pequena') {
           totalPagoPelaPequenaEm50_50 += valor;
+        }
+      } else if (t.tipoDivisao === 'reembolso_integral') {
+        if (t.pagador === 'pequeno') {
+          // Pequeno pagou, logo a Pequena deve reembolsar o valor integral ao Pequeno
+          reembolsoIntegralPequenoRecebe += valor;
+        } else if (t.pagador === 'pequena') {
+          // Pequena pagou, logo o Pequeno deve reembolsar o valor integral à Pequena
+          reembolsoIntegralPequenaRecebe += valor;
         }
       }
     });
@@ -448,6 +462,14 @@ export default function App() {
       if (t.tipoDivisao === '50/50') {
         pesoNoOrcamentoPequeno = arredondar2(valorOriginal / 2);
         pesoNoOrcamentoPequena = arredondar2(valorOriginal / 2);
+      } else if (t.tipoDivisao === 'reembolso_integral') {
+        // Se for reembolso integral, o gasto pertence inteiramente à pessoa que VAI RECEBER o reembolso (ou seja, quem consumiu o produto/serviço)
+        // Regra: quem pagou (t.pagador) fez o favor, mas o dono do gasto é o outro.
+        if (t.pagador === 'pequeno') {
+          pesoNoOrcamentoPequena = valorOriginal; // A Pequena consumiu, o Pequeno apenas antecipou
+        } else {
+          pesoNoOrcamentoPequeno = valorOriginal; // O Pequeno consumiu, a Pequena apenas antecipou
+        }
       } else {
         if (t.pagador === 'pequeno') pesoNoOrcamentoPequeno = valorOriginal;
         if (t.pagador === 'pequena') pesoNoOrcamentoPequena = valorOriginal;
@@ -498,7 +520,13 @@ export default function App() {
 
     const totalGasto5050Mes = arredondar2(totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50);
     const parteIdealCadaUm = arredondar2(totalGasto5050Mes / 2);
-    const saldoLiquidoPequeno = arredondar2(totalPagoPeloPequenoEm50_50 - parteIdealCadaUm); 
+    
+    // Cálculo final unificado do saldo líquido de reembolso para o Pequeno:
+    // Saldo 50/50 + Reembolsos integrais devidos entre o casal
+    const saldoLiquido5050Pequeno = arredondar2(totalPagoPeloPequenoEm50_50 - parteIdealCadaUm);
+    const saldoLiquidoPequeno = arredondar2(
+      saldoLiquido5050Pequeno + reembolsoIntegralPequenoRecebe - reembolsoIntegralPequenaRecebe
+    );
 
     return {
       gastosSalarioTotais: arredondar2(gastosSalarioTotais),
@@ -519,6 +547,8 @@ export default function App() {
       totalPagoPeloPequenoEm50_50: arredondar2(totalPagoPeloPequenoEm50_50),
       totalPagoPelaPequenaEm50_50: arredondar2(totalPagoPelaPequenaEm50_50),
       totalGasto5050Mes,
+      reembolsoIntegralPequenoRecebe,
+      reembolsoIntegralPequenaRecebe,
       saldoLiquidoPequeno
     };
   }, [transacoes, transacoesDoMes, transacoesDashboardAtivas, perfis, filtroPessoa, modoVisualizacaoDashboard]);
@@ -677,7 +707,6 @@ export default function App() {
     });
   };
 
-  // Função de exclusão com confirmação para parcelamentos e próximas parcelas
   const removerTransacao = async (tAlvo) => {
     let excluirProximos = false;
     if (tAlvo.grupoId || (tAlvo.parcelas && tAlvo.parcelas > 1)) {
@@ -1010,8 +1039,8 @@ export default function App() {
                     <ArrowRightLeft className="w-5 h-5 sm:w-6 sm:h-6"/>
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm">Acerto de Contas (50/50)</h3>
-                    <p className="text-[11px] text-slate-400">Reembolsos calculados das despesas compartilhadas.</p>
+                    <h3 className="font-bold text-sm">Acerto de Contas & Reembolsos (PIX)</h3>
+                    <p className="text-[11px] text-slate-400">Soma das despesas 50/50 e adiantamentos/reembolsos integrais.</p>
                   </div>
                 </div>
                 <div className="text-left sm:text-right">
@@ -1022,26 +1051,31 @@ export default function App() {
 
               <div className={`p-3 sm:p-4 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${modoEscuro ? 'bg-slate-700/40 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-slate-400 block">Pagamentos efetuados no mês:</span>
-                  <p className="text-xs">• Pago pelo Pequeno: <strong>R$ {calculos.totalPagoPeloPequenoEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
-                  <p className="text-xs">• Pago pela Pequena: <strong>R$ {calculos.totalPagoPelaPequenaEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
+                  <span className="text-xs font-semibold text-slate-400 block">Resumo dos Pagamentos do Mês:</span>
+                  <p className="text-xs">• Pago pelo Pequeno (50/50): <strong>R$ {calculos.totalPagoPeloPequenoEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
+                  <p className="text-xs">• Pago pela Pequena (50/50): <strong>R$ {calculos.totalPagoPelaPequenaEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
+                  {(calculos.reembolsoIntegralPequenoRecebe > 0 || calculos.reembolsoIntegralPequenaRecebe > 0) && (
+                    <p className="text-xs text-cyan-400 font-semibold mt-1">
+                      • Reembolsos Integrais: Pequeno antecipou R$ {calculos.reembolsoIntegralPequenoRecebe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Pequena antecipou R$ {calculos.reembolsoIntegralPequenaRecebe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  )}
                 </div>
 
                 <div className="text-left md:text-right border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-6 border-slate-300 dark:border-slate-600 w-full md:w-auto">
                   {calculos.saldoLiquidoPequeno > 0 ? (
                     <div>
-                      <span className="text-[10px] font-semibold text-pink-500 block uppercase">Reembolso Devido</span>
-                      <span className="text-sm sm:text-base font-bold text-pink-600">Pequena deposita R$ {calculos.saldoLiquidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ao Pequeno</span>
+                      <span className="text-[10px] font-semibold text-pink-500 block uppercase">PIX de Acerto Devido</span>
+                      <span className="text-sm sm:text-base font-bold text-pink-600">Pequena faz PIX de R$ {calculos.saldoLiquidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ao Pequeno</span>
                     </div>
                   ) : calculos.saldoLiquidoPequeno < 0 ? (
                     <div>
-                      <span className="text-[10px] font-semibold text-cyan-500 block uppercase">Reembolso Devido</span>
-                      <span className="text-sm sm:text-base font-bold text-cyan-600">Pequeno deposita R$ {Math.abs(calculos.saldoLiquidoPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} à Pequena</span>
+                      <span className="text-[10px] font-semibold text-cyan-500 block uppercase">PIX de Acerto Devido</span>
+                      <span className="text-sm sm:text-base font-bold text-cyan-600">Pequeno faz PIX de R$ {Math.abs(calculos.saldoLiquidoPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} à Pequena</span>
                     </div>
                   ) : (
                     <div>
                       <span className="text-[10px] font-semibold text-emerald-500 block uppercase">Contas Acertadas</span>
-                      <span className="text-xs sm:text-sm font-bold text-emerald-600">Nenhum reembolso pendente!</span>
+                      <span className="text-xs sm:text-sm font-bold text-emerald-600">Nenhum PIX pendente entre vocês!</span>
                     </div>
                   )}
                 </div>
@@ -1305,7 +1339,7 @@ export default function App() {
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição (ex: Aluguel, Mercado...)"
+                  type="text" required placeholder="Descrição (ex: Calça no Shopping)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
@@ -1346,7 +1380,7 @@ export default function App() {
                 </div>
                 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Categoria</label>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Categoria (ex: Vestuário)</label>
                   <select
                     value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})}
                     className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
@@ -1369,13 +1403,14 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-400 block mb-1">Divisão</label>
+                    <label className="text-[11px] text-slate-400 block mb-1">Tipo de Divisão</label>
                     <select
                       value={form.tipoDivisao} onChange={(e) => setForm({...form, tipoDivisao: e.target.value})}
-                      className={`w-full px-2 py-2 text-xs sm:text-sm rounded-lg border font-semibold ${form.tipoDivisao === '50/50' ? 'border-amber-500 text-amber-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      className={`w-full px-2 py-2 text-xs sm:text-sm rounded-lg border font-semibold ${form.tipoDivisao === '50/50' ? 'border-amber-500 text-amber-500' : form.tipoDivisao === 'reembolso_integral' ? 'border-cyan-500 text-cyan-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     >
                       <option value="individual">Individual (100%)</option>
-                      <option value="50/50">Dividir 50/50 (Exceção)</option>
+                      <option value="50/50">Dividir 50/50 (Casal)</option>
+                      <option value="reembolso_integral">Reembolso Integral (PIX)</option>
                     </select>
                   </div>
                 </div>
@@ -1429,7 +1464,7 @@ export default function App() {
                     : t.valor;
 
                   return (
-                    <div key={t.id} className={`p-3 rounded-xl border ${editandoTransacao?.id === t.id ? 'border-amber-500 bg-amber-500/10' : t.eAutofinanciamento ? 'border-indigo-400 bg-indigo-50/20' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
+                    <div key={t.id} className={`p-3 rounded-xl border ${editandoTransacao?.id === t.id ? 'border-amber-500 bg-amber-500/10' : t.tipoDivisao === 'reembolso_integral' ? 'border-cyan-400 bg-cyan-50/15' : modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} flex items-center justify-between shadow-sm`}>
                       <div className="pr-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
@@ -1441,15 +1476,17 @@ export default function App() {
                               50/50
                             </span>
                           )}
+                          {t.tipoDivisao === 'reembolso_integral' && (
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30">
+                              Reembolso Integral (PIX)
+                            </span>
+                          )}
                         </div>
                         <span className="font-semibold text-xs sm:text-sm block mt-1">{t.descricao}</span>
                       </div>
                       <div className="flex items-center gap-2.5 shrink-0">
                         <div className="text-right">
                           <span className="font-bold text-xs sm:text-sm block">R$ {Number(valorExibido).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          {t.tipoDivisao === '50/50' && filtroPessoa !== 'todos' && (
-                            <span className="text-[9px] text-slate-400 block">Total: R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          )}
                         </div>
                         <div className="flex items-center gap-0.5">
                           <button onClick={() => iniciarEdicaoTransacao(t)} className="text-slate-400 hover:text-amber-500 p-1">
