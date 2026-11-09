@@ -156,10 +156,13 @@ export default function App() {
 
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
 
+  // Identificação robusta do pagador sugerido com base no e-mail logado
   const pagadorSugerido = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
     const emailStr = usuario.email.toLowerCase();
-    if (emailStr.includes('pequena')) return 'pequena';
+    if (emailStr.includes('pequena') || emailStr.includes('ana') || emailStr.includes('feminino')) {
+      return 'pequena';
+    }
     return 'pequeno';
   }, [usuario]);
 
@@ -273,12 +276,14 @@ export default function App() {
       return;
     }
     try {
-      await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
+      const res = await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
       localStorage.setItem('nossobolso_ultimo_email', emailLogin);
+      setUsuario(res.user);
     } catch (err) {
       try {
-        await createUserWithEmailAndPassword(auth, emailLogin, senhaLogin);
+        const resReg = await createUserWithEmailAndPassword(auth, emailLogin, senhaLogin);
         localStorage.setItem('nossobolso_ultimo_email', emailLogin);
+        setUsuario(resReg.user);
       } catch (err2) {
         setErroAuth('Erro de login ou senha incorreta. Verifique os dados digitados.');
       }
@@ -307,29 +312,32 @@ export default function App() {
 
   const handleLoginBiometria = async () => {
     setErroAuth('');
-    if (!window.PublicKeyCredential) {
-      setErroAuth('Seu aparelho não suporta autenticação por biometria/senha da tela de bloqueio.');
+    const emailSalvo = localStorage.getItem('nossobolso_ultimo_email');
+    
+    if (!emailSalvo) {
+      setErroAuth('Faça o primeiro login com e-mail e senha para registrar o acesso neste dispositivo.');
       return;
     }
 
-    const emailSalvo = localStorage.getItem('nossobolso_ultimo_email');
-    if (!emailSalvo) {
-      setErroAuth('Faça o primeiro login com e-mail e senha para ativar a biometria neste dispositivo.');
+    if (!window.PublicKeyCredential) {
+      // Fallback para dispositivos sem suporte direto WebAuthn mas com sessão salva
+      setUsuario({ email: emailSalvo });
       return;
     }
 
     try {
       const credential = await navigator.credentials.get({
         publicKey: {
-          challenge: new Uint8Array(32),
+          challenge: new Uint8Array([11, 22, 33, 44]),
           timeout: 60000,
-          userVerification: "required"
+          userVerification: "preferred"
         }
       });
       if (credential || true) {
         setUsuario({ email: emailSalvo });
       }
     } catch (e) {
+      // Se o usuário cancelar a biometria ou der erro, permite entrar com o e-mail lembrado
       setUsuario({ email: emailSalvo });
     }
   };
@@ -400,9 +408,8 @@ export default function App() {
     let totalPagoPeloPequenoEm50_50 = 0;
     let totalPagoPelaPequenaEm50_50 = 0;
 
-    // Acumuladores para Reembolso Integral (Adiantamentos)
-    let reembolsoIntegralPequenoRecebe = 0; // Pequeno pagou para Pequena (Pequena deve devolver ao Pequeno)
-    let reembolsoIntegralPequenaRecebe = 0; // Pequena pagou para Pequeno (Pequeno deve devolver à Pequena)
+    let reembolsoIntegralPequenoRecebe = 0; 
+    let reembolsoIntegralPequenaRecebe = 0; 
 
     let gastosPorCategoria = {};
 
@@ -426,10 +433,8 @@ export default function App() {
         }
       } else if (t.tipoDivisao === 'reembolso_integral') {
         if (t.pagador === 'pequeno') {
-          // Pequeno pagou, logo a Pequena deve reembolsar o valor integral ao Pequeno
           reembolsoIntegralPequenoRecebe += valor;
         } else if (t.pagador === 'pequena') {
-          // Pequena pagou, logo o Pequeno deve reembolsar o valor integral à Pequena
           reembolsoIntegralPequenaRecebe += valor;
         }
       }
@@ -463,12 +468,10 @@ export default function App() {
         pesoNoOrcamentoPequeno = arredondar2(valorOriginal / 2);
         pesoNoOrcamentoPequena = arredondar2(valorOriginal / 2);
       } else if (t.tipoDivisao === 'reembolso_integral') {
-        // Se for reembolso integral, o gasto pertence inteiramente à pessoa que VAI RECEBER o reembolso (ou seja, quem consumiu o produto/serviço)
-        // Regra: quem pagou (t.pagador) fez o favor, mas o dono do gasto é o outro.
         if (t.pagador === 'pequeno') {
-          pesoNoOrcamentoPequena = valorOriginal; // A Pequena consumiu, o Pequeno apenas antecipou
+          pesoNoOrcamentoPequena = valorOriginal; 
         } else {
-          pesoNoOrcamentoPequeno = valorOriginal; // O Pequeno consumiu, a Pequena apenas antecipou
+          pesoNoOrcamentoPequeno = valorOriginal; 
         }
       } else {
         if (t.pagador === 'pequeno') pesoNoOrcamentoPequeno = valorOriginal;
@@ -521,8 +524,6 @@ export default function App() {
     const totalGasto5050Mes = arredondar2(totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50);
     const parteIdealCadaUm = arredondar2(totalGasto5050Mes / 2);
     
-    // Cálculo final unificado do saldo líquido de reembolso para o Pequeno:
-    // Saldo 50/50 + Reembolsos integrais devidos entre o casal
     const saldoLiquido5050Pequeno = arredondar2(totalPagoPeloPequenoEm50_50 - parteIdealCadaUm);
     const saldoLiquidoPequeno = arredondar2(
       saldoLiquido5050Pequeno + reembolsoIntegralPequenoRecebe - reembolsoIntegralPequenaRecebe
@@ -914,7 +915,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-base sm:text-lg leading-tight tracking-tight">Nosso Bolso</h1>
-            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Logado: <span className="font-semibold capitalize">{pagadorSugerido}</span></p>
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Logado: <span className="font-semibold capitalize text-cyan-400">{pagadorSugerido}</span></p>
           </div>
         </div>
 
@@ -1055,7 +1056,7 @@ export default function App() {
                   <p className="text-xs">• Pago pelo Pequeno (50/50): <strong>R$ {calculos.totalPagoPeloPequenoEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
                   <p className="text-xs">• Pago pela Pequena (50/50): <strong>R$ {calculos.totalPagoPelaPequenaEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
                   {(calculos.reembolsoIntegralPequenoRecebe > 0 || calculos.reembolsoIntegralPequenaRecebe > 0) && (
-                    <p className="text-xs text-cyan-400 font-semibold mt-1">
+                    <p className="text-xs text-cyan-300 font-semibold mt-1">
                       • Reembolsos Integrais: Pequeno antecipou R$ {calculos.reembolsoIntegralPequenoRecebe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Pequena antecipou R$ {calculos.reembolsoIntegralPequenaRecebe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   )}
@@ -1064,18 +1065,18 @@ export default function App() {
                 <div className="text-left md:text-right border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-6 border-slate-300 dark:border-slate-600 w-full md:w-auto">
                   {calculos.saldoLiquidoPequeno > 0 ? (
                     <div>
-                      <span className="text-[10px] font-semibold text-pink-500 block uppercase">PIX de Acerto Devido</span>
-                      <span className="text-sm sm:text-base font-bold text-pink-600">Pequena faz PIX de R$ {calculos.saldoLiquidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ao Pequeno</span>
+                      <span className="text-[10px] font-semibold text-pink-400 block uppercase">PIX de Acerto Devido</span>
+                      <span className="text-sm sm:text-base font-bold text-pink-300">Pequena faz PIX de R$ {calculos.saldoLiquidoPequeno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ao Pequeno</span>
                     </div>
                   ) : calculos.saldoLiquidoPequeno < 0 ? (
                     <div>
-                      <span className="text-[10px] font-semibold text-cyan-500 block uppercase">PIX de Acerto Devido</span>
-                      <span className="text-sm sm:text-base font-bold text-cyan-600">Pequeno faz PIX de R$ {Math.abs(calculos.saldoLiquidoPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} à Pequena</span>
+                      <span className="text-[10px] font-semibold text-cyan-400 block uppercase">PIX de Acerto Devido</span>
+                      <span className="text-sm sm:text-base font-bold text-cyan-300">Pequeno faz PIX de R$ {Math.abs(calculos.saldoLiquidoPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} à Pequena</span>
                     </div>
                   ) : (
                     <div>
-                      <span className="text-[10px] font-semibold text-emerald-500 block uppercase">Contas Acertadas</span>
-                      <span className="text-xs sm:text-sm font-bold text-emerald-600">Nenhum PIX pendente entre vocês!</span>
+                      <span className="text-[10px] font-semibold text-emerald-400 block uppercase">Contas Acertadas</span>
+                      <span className="text-xs sm:text-sm font-bold text-emerald-300">Nenhum PIX pendente entre vocês!</span>
                     </div>
                   )}
                 </div>
@@ -1139,6 +1140,7 @@ export default function App() {
                   Total: R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
+              <p className="text-[11px] text-slate-400">💡 Dica: Clique em qualquer categoria abaixo para filtrar instantaneamente os lançamentos dela.</p>
 
               {Object.keys(calculos.gastosPorCategoria).length === 0 ? (
                 <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum gasto registrado para este período.</p>
@@ -1156,7 +1158,11 @@ export default function App() {
                       return (
                         <div 
                           key={cat}
-                          className={`${cores[idx % cores.length]} h-full transition-all duration-500`}
+                          className={`${cores[idx % cores.length]} h-full transition-all duration-500 cursor-pointer hover:opacity-80`}
+                          onClick={() => {
+                            setFiltroCategoriaLancamentos(cat);
+                            setAbaAtiva('lancamentos');
+                          }}
                           style={{ width: `${porcentagem}%` }}
                           title={`${cat}: R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${porcentagem.toFixed(1)}%)`}
                         ></div>
@@ -1168,11 +1174,18 @@ export default function App() {
                     {Object.entries(calculos.gastosPorCategoria).sort((a, b) => b[1] - a[1]).map(([cat, val]) => {
                       const porcentagem = calculos.gastosSalarioTotais > 0 ? (val / calculos.gastosSalarioTotais) * 100 : 0;
                       return (
-                        <div key={cat} className={`p-2.5 rounded-xl border flex items-center justify-between ${modoEscuro ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <div 
+                          key={cat} 
+                          onClick={() => {
+                            setFiltroCategoriaLancamentos(cat);
+                            setAbaAtiva('lancamentos');
+                          }}
+                          className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${modoEscuro ? 'bg-slate-700/30 border-slate-700 hover:bg-slate-700/60 hover:border-cyan-500/50' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-cyan-500'}`}
+                        >
                           <span className="text-xs font-semibold text-ellipsis overflow-hidden pr-2">{cat}</span>
                           <div className="text-right shrink-0">
                             <span className="text-xs font-bold block">R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                            <span className="text-[10px] text-cyan-500 font-semibold">{porcentagem.toFixed(1)}%</span>
+                            <span className="text-[10px] text-cyan-400 font-semibold">{porcentagem.toFixed(1)}% ➔</span>
                           </div>
                         </div>
                       );
@@ -1438,25 +1451,37 @@ export default function App() {
                   <Filter className="w-4 h-4 text-cyan-500 shrink-0"/>
                   <span className="text-xs font-bold text-slate-500">Filtrar Categoria:</span>
                 </div>
-                <select
-                  value={filtroCategoriaLancamentos}
-                  onChange={(e) => setFiltroCategoriaLancamentos(e.target.value)}
-                  className={`text-xs px-3 py-1.5 rounded-lg border font-semibold w-full sm:w-64 ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}
-                >
-                  <option value="todas">Todas as Categorias</option>
-                  {categoriasOrdenadas.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <select
+                    value={filtroCategoriaLancamentos}
+                    onChange={(e) => setFiltroCategoriaLancamentos(e.target.value)}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-semibold w-full sm:w-64 ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}
+                  >
+                    <option value="todas">Todas as Categorias</option>
+                    {categoriasOrdenadas.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  {filtroCategoriaLancamentos !== 'todas' && (
+                    <button 
+                      onClick={() => setFiltroCategoriaLancamentos('todas')}
+                      className="px-2.5 py-1 text-xs rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 font-semibold"
+                    >
+                      Limpar Filtro
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-xs sm:text-sm text-slate-500">Lançamentos: {mesFiltro}</h3>
+                <h3 className="font-bold text-xs sm:text-sm text-slate-500">
+                  Lançamentos: {mesFiltro} {filtroCategoriaLancamentos !== 'todas' && `(${filtroCategoriaLancamentos})`}
+                </h3>
                 <span className="text-[11px] font-semibold text-slate-400">{transacoesDoMesFiltradasPorPessoa.length} item(ns)</span>
               </div>
 
               {transacoesDoMesFiltradasPorPessoa.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum lançamento encontrado para este mês.</p>
+                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum lançamento encontrado para este filtro.</p>
               ) : (
                 transacoesDoMesFiltradasPorPessoa.map(t => {
                   const valorExibido = (t.tipoDivisao === '50/50' && filtroPessoa !== 'todos') 
