@@ -141,7 +141,6 @@ export default function App() {
     return CATEGORIAS_PADRAO;
   });
 
-  // Limites de orçamento por categoria (ex: { 'Alimentação / Delivery': 1200, ... })
   const [limitesOrcamento, setLimitesOrcamento] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_limites_orcamento');
     if (salvo) return JSON.parse(salvo);
@@ -175,21 +174,35 @@ export default function App() {
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
 
+  // MAPEAMENTO DE E-MAILS POR PERFIL (Salvo em localStorage)
+  const [mapeamentoEmails, setMapeamentoEmails] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_mapeamento_emails');
+    return salvo ? JSON.parse(salvo) : {};
+  });
+
   const pagadorSugerido = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
-    const perfilSalvoNoAparelho = localStorage.getItem('nossobolso_perfil_ativo');
-    if (perfilSalvoNoAparelho) return perfilSalvoNoAparelho;
-
     const emailStr = usuario.email.toLowerCase();
+
+    // 1. Verifica se este e-mail já foi explicitamente vinculado nas configurações
+    if (mapeamentoEmails[emailStr]) {
+      return mapeamentoEmails[emailStr];
+    }
+
+    // 2. Fallback inteligente por palavras-chave
     if (emailStr.includes('pequena') || emailStr.includes('ana') || emailStr.includes('feminino')) {
       return 'pequena';
     }
     return 'pequeno';
-  }, [usuario]);
+  }, [usuario, mapeamentoEmails]);
 
-  const alterarPerfilAtivoNoAparelho = (novoPerfil) => {
-    localStorage.setItem('nossobolso_perfil_ativo', novoPerfil);
-    window.location.reload();
+  const vincularEmailAoPerfil = (perfilAlvo) => {
+    if (!usuario || !usuario.email) return;
+    const emailStr = usuario.email.toLowerCase();
+    const novoMap = { ...mapeamentoEmails, [emailStr]: perfilAlvo };
+    setMapeamentoEmails(novoMap);
+    localStorage.setItem('nossobolso_mapeamento_emails', JSON.stringify(novoMap));
+    alert(`E-mail ${usuario.email} vinculado com sucesso ao perfil ${perfilAlvo === 'pequena' ? 'Pequena' : 'Pequeno'}!`);
   };
 
   const [atalhosPorPerfil, setAtalhosPorPerfil] = useState(() => {
@@ -341,7 +354,7 @@ export default function App() {
       } catch (err) {
         setStatusAviso({
           tipo: 'erro',
-          mensagem: 'Falha ao sincronizar com a nuvem. Suas alterações foram salvas no aparelho.'
+          mensagem: 'Falha ao sincronizar com a nuvem.'
         });
       }
     }
@@ -384,7 +397,7 @@ export default function App() {
         localStorage.setItem('nossobolso_ultimo_email', emailLogin);
         setUsuario(resReg.user);
       } catch (err2) {
-        setErroAuth('Erro de login ou senha incorreta. Verifique os dados digitados.');
+        setErroAuth('Erro de login ou senha incorreta.');
       }
     }
   };
@@ -393,19 +406,15 @@ export default function App() {
     e.preventDefault();
     setErroAuth('');
     setMensagemSucessoAuth('');
-
     if (!emailLogin) {
-      setErroAuth('Digite seu e-mail no campo abaixo para receber as instruções.');
+      setErroAuth('Digite seu e-mail.');
       return;
     }
-
     try {
-      if (auth) {
-        await sendPasswordResetEmail(auth, emailLogin);
-      }
-      setMensagemSucessoAuth(`E-mail de recuperação enviado com sucesso para ${emailLogin}! Verifique sua caixa de entrada e spam.`);
+      if (auth) await sendPasswordResetEmail(auth, emailLogin);
+      setMensagemSucessoAuth(`E-mail de recuperação enviado para ${emailLogin}!`);
     } catch (err) {
-      setErroAuth('Não foi possível enviar o e-mail de redefinição. Verifique se o e-mail está correto.');
+      setErroAuth('Não foi possível enviar o e-mail.');
     }
   };
 
@@ -413,7 +422,7 @@ export default function App() {
     setErroAuth('');
     const emailSalvo = localStorage.getItem('nossobolso_ultimo_email');
     if (!emailSalvo) {
-      setErroAuth('Faça o primeiro login com e-mail e senha para registrar o acesso neste dispositivo.');
+      setErroAuth('Faça o primeiro login com e-mail e senha.');
       return;
     }
     setUsuario({ email: emailSalvo });
@@ -422,17 +431,16 @@ export default function App() {
   const handleAlterarSenhaLogado = async (e) => {
     e.preventDefault();
     if (!novaSenhaConfig || novaSenhaConfig.length < 6) {
-      alert("A nova senha precisa ter no mínimo 6 caracteres.");
+      alert("Mínimo 6 caracteres.");
       return;
     }
-
     if (auth && auth.currentUser) {
       try {
         await updatePassword(auth.currentUser, novaSenhaConfig);
         alert("Senha alterada com sucesso!");
         setNovaSenhaConfig('');
       } catch (err) {
-        alert("Para alterar a senha, faça o re-login no app por motivos de segurança.");
+        alert("Faça o re-login para alterar a senha.");
       }
     }
   };
@@ -847,10 +855,9 @@ export default function App() {
   const iniciarReconhecimentoVoz = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Seu navegador ou dispositivo não suporta entrada por voz. Use o Chrome no Android ou Safari no iOS.");
+      alert("Seu navegador não suporta voz.");
       return;
     }
-
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
     recognition.interimResults = false;
@@ -858,10 +865,7 @@ export default function App() {
 
     recognition.onstart = () => setOuvindoVoz(true);
     recognition.onend = () => setOuvindoVoz(false);
-    recognition.onerror = () => {
-      setOuvindoVoz(false);
-      alert("Não foi possível capturar o áudio.");
-    };
+    recognition.onerror = () => setOuvindoVoz(false);
 
     recognition.onresult = (event) => {
       const transcricao = event.results[0][0].transcript;
@@ -934,12 +938,6 @@ export default function App() {
                 Entrar ou Cadastrar
               </button>
 
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-slate-700"></div>
-                <span className="flex-shrink mx-3 text-slate-500 text-[11px] uppercase font-semibold">ou acesse com</span>
-                <div className="flex-grow border-t border-slate-700"></div>
-              </div>
-
               <button 
                 type="button" 
                 onClick={handleLoginBiometria}
@@ -951,29 +949,19 @@ export default function App() {
             </form>
           ) : (
             <form onSubmit={handleEnviarRecuperacaoSenha} className="space-y-4">
-              <p className="text-xs text-slate-300">Digite seu e-mail cadastrado para enviarmos o link de recuperação de senha:</p>
-              
+              <p className="text-xs text-slate-300">Digite seu e-mail cadastrado:</p>
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">E-mail Cadastrado</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3"/>
-                  <input 
-                    type="email" required placeholder="seuemail@email.com"
-                    value={emailLogin} onChange={(e) => setEmailLogin(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2.5 text-sm rounded-lg bg-slate-700 border border-slate-600 text-white focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">E-mail</label>
+                <input 
+                  type="email" required placeholder="seuemail@email.com"
+                  value={emailLogin} onChange={(e) => setEmailLogin(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm rounded-lg bg-slate-700 border border-slate-600 text-white"
+                />
               </div>
-
-              <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 rounded-lg text-sm transition-all">
-                Enviar Link de Recuperação
+              <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 rounded-lg text-sm">
+                Enviar Link
               </button>
-
-              <button 
-                type="button" 
-                onClick={() => { setModoEsqueciSenha(false); setErroAuth(''); setMensagemSucessoAuth(''); }}
-                className="w-full text-xs text-slate-400 hover:text-white py-1"
-              >
+              <button type="button" onClick={() => setModoEsqueciSenha(false)} className="w-full text-xs text-slate-400 hover:text-white py-1">
                 Voltar para o Login
               </button>
             </form>
@@ -992,16 +980,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-base sm:text-lg leading-tight tracking-tight">Nosso Bolso</h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Perfil: <span className="font-semibold capitalize text-cyan-400">{pagadorSugerido}</span></p>
-              <button 
-                onClick={() => alterarPerfilAtivoNoAparelho(pagadorSugerido === 'pequeno' ? 'pequena' : 'pequeno')}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 hover:text-white border border-slate-600"
-                title="Alternar perfil neste dispositivo"
-              >
-                Trocar p/ {pagadorSugerido === 'pequeno' ? 'Pequena' : 'Pequeno'} 🔄
-              </button>
-            </div>
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Logado como: <span className="font-semibold capitalize text-cyan-400">{pagadorSugerido}</span> ({usuario.email})</p>
           </div>
         </div>
 
@@ -1183,7 +1162,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* SEÇÃO DE ALERTAS E LIMITES DE ORÇAMENTO NO DASHBOARD */}
             {Object.keys(limitesOrcamento).length > 0 && (
               <div className={`p-4 sm:p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-3`}>
                 <div className="flex items-center justify-between">
@@ -1319,6 +1297,32 @@ export default function App() {
 
         {abaAtiva === 'config' && (
           <div className="space-y-6">
+            {/* NOVO: SEÇÃO DE VINCULAÇÃO DE E-MAIL AO PERFIL */}
+            <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
+              <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                <Users className="w-5 h-5 text-cyan-500"/> Vincular E-mail Logado ao Perfil
+              </h2>
+              <p className="text-xs text-slate-400">
+                O e-mail atual (<span className="text-cyan-400 font-semibold">{usuario?.email}</span>) está identificado como <strong className="capitalize text-cyan-300">{pagadorSugerido}</strong>. Se quiser fixar qual perfil este e-mail representa neste aparelho, clique abaixo:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => vincularEmailAoPerfil('pequeno')}
+                  className={`py-2.5 rounded-lg text-xs font-bold border transition-all ${pagadorSugerido === 'pequeno' ? 'bg-cyan-600 text-white border-cyan-500 shadow-md' : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'}`}
+                >
+                  Vincular a Pequeno
+                </button>
+                <button
+                  type="button"
+                  onClick={() => vincularEmailAoPerfil('pequena')}
+                  className={`py-2.5 rounded-lg text-xs font-bold border transition-all ${pagadorSugerido === 'pequena' ? 'bg-pink-600 text-white border-pink-500 shadow-md' : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'}`}
+                >
+                  Vincular a Pequena
+                </button>
+              </div>
+            </div>
+
             <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
                 <KeyRound className="w-5 h-5 text-cyan-500"/> Alterar Senha da Conta
@@ -1338,12 +1342,11 @@ export default function App() {
               </form>
             </div>
 
-            {/* GERENCIAMENTO DE LIMITES DE ORÇAMENTO */}
             <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-500"/> Limites de Orçamento por Categoria
               </h2>
-              <p className="text-xs text-slate-400">Defina tetos mensais para receber alertas visuais quando o gasto estiver perto ou acima do limite.</p>
+              <p className="text-xs text-slate-400">Defina tetos mensais para receber alertas visuais.</p>
 
               <form onSubmit={handleSalvarLimiteOrcamento} className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                 <select
