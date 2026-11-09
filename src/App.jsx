@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Coffee, Car, ShoppingBag, Beer
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -44,6 +44,15 @@ const CATEGORIAS_PADRAO = [
   'Autofinanciamento (Devolução)',
   'Férias / 13º / 1/3 (Viagens)',
   'Outros'
+];
+
+// Lista de atalhos rápidos pré-configurados (você pode alterar os nomes e categorias aqui)
+const ATALHOS_FREQUENTES = [
+  { label: '☕ Café', descricao: 'Café', categoria: 'Alimentação / Delivery' },
+  { label: '🥐 Padaria', descricao: 'Padaria', categoria: 'Alimentação / Delivery' },
+  { label: '🚗 Uber / Táxi', descricao: 'Uber', categoria: 'Carro' },
+  { label: '🛒 Mercado', descricao: 'Supermercado', categoria: 'Mercado & Casa (Salário)' },
+  { label: '🍕 Ifood / Delivery', descricao: 'Delivery', categoria: 'Alimentação / Delivery' }
 ];
 
 const formatarMoedaInput = (valor) => {
@@ -156,7 +165,6 @@ export default function App() {
 
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
 
-  // Identificação robusta do pagador sugerido com base no e-mail logado
   const pagadorSugerido = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
     const emailStr = usuario.email.toLowerCase();
@@ -320,7 +328,6 @@ export default function App() {
     }
 
     if (!window.PublicKeyCredential) {
-      // Fallback para dispositivos sem suporte direto WebAuthn mas com sessão salva
       setUsuario({ email: emailSalvo });
       return;
     }
@@ -337,7 +344,6 @@ export default function App() {
         setUsuario({ email: emailSalvo });
       }
     } catch (e) {
-      // Se o usuário cancelar a biometria ou der erro, permite entrar com o e-mail lembrado
       setUsuario({ email: emailSalvo });
     }
   };
@@ -1349,6 +1355,37 @@ export default function App() {
                   </button>
                 )}
               </div>
+
+              {/* SEÇÃO DE ATALHOS RÁPIDOS */}
+              {!editandoTransacao && (
+                <div className="space-y-1.5 pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-amber-400"/> Atalhos Frequentes
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ATALHOS_FREQUENTES.map((atalho, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          setForm(prev => ({
+                            ...prev,
+                            descricao: atalho.descricao,
+                            categoria: atalho.categoria
+                          }));
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all border ${
+                          modoEscuro 
+                            ? 'bg-slate-700/60 border-slate-600 text-slate-200 hover:bg-cyan-600 hover:border-cyan-500 hover:text-white' 
+                            : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-cyan-500 hover:text-white'
+                        }`}
+                      >
+                        {atalho.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
