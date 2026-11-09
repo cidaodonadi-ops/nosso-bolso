@@ -160,17 +160,29 @@ export default function App() {
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
 
-  // Identificação do pagador sugerido com base no e-mail logado
+  // Identificação robusta do perfil ativo com base no e-mail ou escolha manual salva no navegador
   const pagadorSugerido = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
+    
+    // Você pode forçar ou salvar qual perfil este dispositivo/navegador representa
+    const perfilSalvoNoAparelho = localStorage.getItem('nossobolso_perfil_ativo');
+    if (perfilSalvoNoAparelho) return perfilSalvoNoAparelho;
+
     const emailStr = usuario.email.toLowerCase();
-    if (emailStr.includes('pequena') || emailStr.includes('ana') || emailStr.includes('feminino')) {
+    // Se o e-mail contiver termos que identifiquem a Pequena (você pode ajustar os termos abaixo se precisar)
+    if (emailStr.includes('pequena') || emailStr.includes('ana') || emailStr.includes('feminino') || emailStr.includes('outro_email_dela@')) {
       return 'pequena';
     }
     return 'pequeno';
   }, [usuario]);
 
-  // Gerenciamento de Atalhos Separados por Perfil (Pequeno vs Pequena)
+  // Função para alternar manualmente o perfil logado neste aparelho caso necessário
+  const alterarPerfilAtivoNoAparelho = (novoPerfil) => {
+    localStorage.setItem('nossobolso_perfil_ativo', novoPerfil);
+    window.location.reload(); // Recarrega para aplicar instantaneamente
+  };
+
+  // Gerenciamento de Atalhos Separados por Perfil
   const [atalhosPorPerfil, setAtalhosPorPerfil] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_atalhos_usuarios');
     if (salvo) return JSON.parse(salvo);
@@ -183,7 +195,6 @@ export default function App() {
   const [novoAtalhosLabel, setNovoAtalhosLabel] = useState('');
   const [mostrandoAddAtalho, setMostrandoAddAtalho] = useState(false);
 
-  // Atalhos ativos para a pessoa logada no momento
   const atalhosAtuais = atalhosPorPerfil[pagadorSugerido] || ATALHOS_INICIAIS_PADRAO;
 
   const adicionarAtalhoPessoal = (e) => {
@@ -834,7 +845,7 @@ export default function App() {
     recognition.onend = () => setOuvindoVoz(false);
     recognition.onerror = () => {
       setOuvindoVoz(false);
-      alert("Não foi possível capturar o áudio. Verifique se o navegador tem permissão para usar o microfone.");
+      alert("Não foi possível capturar o áudio. Verifique se o navegador tiene permissão para usar o microfone.");
     };
 
     recognition.onresult = (event) => {
@@ -966,7 +977,17 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-base sm:text-lg leading-tight tracking-tight">Nosso Bolso</h1>
-            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Logado: <span className="font-semibold capitalize text-cyan-400">{pagadorSugerido}</span></p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Perfil: <span className="font-semibold capitalize text-cyan-400">{pagadorSugerido}</span></p>
+              {/* Botão rápido para trocar de perfil neste aparelho caso o e-mail não seja o padrão */}
+              <button 
+                onClick={() => alterarPerfilAtivoNoAparelho(pagadorSugerido === 'pequeno' ? 'pequena' : 'pequeno')}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 hover:text-white border border-slate-600"
+                title="Alternar perfil neste dispositivo"
+              >
+                Trocar p/ {pagadorSugerido === 'pequeno' ? 'Pequena' : 'Pequeno'} 🔄
+              </button>
+            </div>
           </div>
         </div>
 
