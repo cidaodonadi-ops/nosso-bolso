@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, RefreshCw, Sparkles, PieChart, Users, CheckCircle2, AlertCircle, Utensils, Edit3, X, TrendingUp, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -141,6 +141,21 @@ export default function App() {
     return CATEGORIAS_PADRAO;
   });
 
+  // Limites de orçamento por categoria (ex: { 'Alimentação / Delivery': 1200, ... })
+  const [limitesOrcamento, setLimitesOrcamento] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_limites_orcamento');
+    if (salvo) return JSON.parse(salvo);
+    return {
+      'Alimentação / Delivery': 1000,
+      'Mercado & Casa (Salário)': 1500,
+      'Lazer & Superfaturados': 600,
+      'Carro': 500
+    };
+  });
+
+  const [categoriaSelecionadaLimite, setCategoriaSelecionadaLimite] = useState(CATEGORIAS_PADRAO[0]);
+  const [valorLimiteInput, setValorLimiteInput] = useState('');
+
   const [transacoes, setTransacoes] = useState([]);
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [modoVisualizacaoDashboard, setModoVisualizacaoDashboard] = useState('mes');
@@ -160,29 +175,23 @@ export default function App() {
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
 
-  // Identificação robusta do perfil ativo com base no e-mail ou escolha manual salva no navegador
   const pagadorSugerido = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
-    
-    // Você pode forçar ou salvar qual perfil este dispositivo/navegador representa
     const perfilSalvoNoAparelho = localStorage.getItem('nossobolso_perfil_ativo');
     if (perfilSalvoNoAparelho) return perfilSalvoNoAparelho;
 
     const emailStr = usuario.email.toLowerCase();
-    // Se o e-mail contiver termos que identifiquem a Pequena (você pode ajustar os termos abaixo se precisar)
-    if (emailStr.includes('pequena') || emailStr.includes('ana') || emailStr.includes('feminino') || emailStr.includes('outro_email_dela@')) {
+    if (emailStr.includes('pequena') || emailStr.includes('ana') || emailStr.includes('feminino')) {
       return 'pequena';
     }
     return 'pequeno';
   }, [usuario]);
 
-  // Função para alternar manualmente o perfil logado neste aparelho caso necessário
   const alterarPerfilAtivoNoAparelho = (novoPerfil) => {
     localStorage.setItem('nossobolso_perfil_ativo', novoPerfil);
-    window.location.reload(); // Recarrega para aplicar instantaneamente
+    window.location.reload();
   };
 
-  // Gerenciamento de Atalhos Separados por Perfil
   const [atalhosPorPerfil, setAtalhosPorPerfil] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_atalhos_usuarios');
     if (salvo) return JSON.parse(salvo);
@@ -194,7 +203,6 @@ export default function App() {
 
   const [novoAtalhosLabel, setNovoAtalhosLabel] = useState('');
   const [mostrandoAddAtalho, setMostrandoAddAtalho] = useState(false);
-
   const atalhosAtuais = atalhosPorPerfil[pagadorSugerido] || ATALHOS_INICIAIS_PADRAO;
 
   const adicionarAtalhoPessoal = (e) => {
@@ -290,6 +298,10 @@ export default function App() {
         if (configDoc.exists()) {
           const dados = configDoc.data();
           if (dados.perfis) setPerfis(dados.perfis);
+          if (dados.limitesOrcamento) {
+            setLimitesOrcamento(dados.limitesOrcamento);
+            localStorage.setItem('nossobolso_limites_orcamento', JSON.stringify(dados.limitesOrcamento));
+          }
           if (dados.categorias && Array.isArray(dados.categorias)) {
             let catNuvem = dados.categorias;
             if (!catNuvem.includes('Investimentos / Aportes')) catNuvem.push('Investimentos / Aportes');
@@ -307,14 +319,18 @@ export default function App() {
     carregarDadosNuvem();
   }, [usuario]);
 
-  const salvarConfiguracoesNaNuvem = async (novosPerfis, novasCategorias) => {
+  const salvarConfiguracoesNaNuvem = async (novosPerfis, novasCategorias, novosLimites) => {
     localStorage.setItem('nossobolso_categorias', JSON.stringify(novasCategorias));
+    if (novosLimites) {
+      localStorage.setItem('nossobolso_limites_orcamento', JSON.stringify(novosLimites));
+    }
     
     if (db && usuario) {
       try {
         await setDoc(doc(db, "configuracoes", "geral"), {
           perfis: novosPerfis,
-          categorias: novasCategorias
+          categorias: novasCategorias,
+          limitesOrcamento: novosLimites || limitesOrcamento
         }, { merge: true });
         
         setStatusAviso({
@@ -329,6 +345,25 @@ export default function App() {
         });
       }
     }
+  };
+
+  const handleSalvarLimiteOrcamento = (e) => {
+    e.preventDefault();
+    const valNum = Number(parseMoedaInput(valorLimiteInput)) || 0;
+    const novosLimites = {
+      ...limitesOrcamento,
+      [categoriaSelecionadaLimite]: valNum
+    };
+    setLimitesOrcamento(novosLimites);
+    salvarConfiguracoesNaNuvem(perfis, categorias, novosLimites);
+    setValorLimiteInput('');
+  };
+
+  const removerLimiteOrcamento = (catKey) => {
+    const novosLimites = { ...limitesOrcamento };
+    delete novosLimites[catKey];
+    setLimitesOrcamento(novosLimites);
+    salvarConfiguracoesNaNuvem(perfis, categorias, novosLimites);
   };
 
   const handleLogin = async (e) => {
@@ -377,31 +412,11 @@ export default function App() {
   const handleLoginBiometria = async () => {
     setErroAuth('');
     const emailSalvo = localStorage.getItem('nossobolso_ultimo_email');
-    
     if (!emailSalvo) {
       setErroAuth('Faça o primeiro login com e-mail e senha para registrar o acesso neste dispositivo.');
       return;
     }
-
-    if (!window.PublicKeyCredential) {
-      setUsuario({ email: emailSalvo });
-      return;
-    }
-
-    try {
-      const credential = await navigator.credentials.get({
-        publicKey: {
-          challenge: new Uint8Array([11, 22, 33, 44]),
-          timeout: 60000,
-          userVerification: "preferred"
-        }
-      });
-      if (credential || true) {
-        setUsuario({ email: emailSalvo });
-      }
-    } catch (e) {
-      setUsuario({ email: emailSalvo });
-    }
+    setUsuario({ email: emailSalvo });
   };
 
   const handleAlterarSenhaLogado = async (e) => {
@@ -845,7 +860,7 @@ export default function App() {
     recognition.onend = () => setOuvindoVoz(false);
     recognition.onerror = () => {
       setOuvindoVoz(false);
-      alert("Não foi possível capturar o áudio. Verifique se o navegador tiene permissão para usar o microfone.");
+      alert("Não foi possível capturar o áudio.");
     };
 
     recognition.onresult = (event) => {
@@ -931,7 +946,7 @@ export default function App() {
                 className="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2.5 rounded-lg text-sm border border-slate-600 flex items-center justify-center gap-2 transition-all"
               >
                 <Fingerprint className="w-5 h-5 text-cyan-400"/>
-                Entrar com Senha do Aparelho / Biometria
+                Entrar com Conta Salva no Aparelho
               </button>
             </form>
           ) : (
@@ -979,7 +994,6 @@ export default function App() {
             <h1 className="font-bold text-base sm:text-lg leading-tight tracking-tight">Nosso Bolso</h1>
             <div className="flex items-center gap-2 mt-0.5">
               <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Perfil: <span className="font-semibold capitalize text-cyan-400">{pagadorSugerido}</span></p>
-              {/* Botão rápido para trocar de perfil neste aparelho caso o e-mail não seja o padrão */}
               <button 
                 onClick={() => alterarPerfilAtivoNoAparelho(pagadorSugerido === 'pequeno' ? 'pequena' : 'pequeno')}
                 className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 hover:text-white border border-slate-600"
@@ -1127,11 +1141,6 @@ export default function App() {
                   <span className="text-xs font-semibold text-slate-400 block">Resumo dos Pagamentos do Mês:</span>
                   <p className="text-xs">• Pago pelo Pequeno (50/50): <strong>R$ {calculos.totalPagoPeloPequenoEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
                   <p className="text-xs">• Pago pela Pequena (50/50): <strong>R$ {calculos.totalPagoPelaPequenaEm50_50.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
-                  {(calculos.reembolsoIntegralPequenoRecebe > 0 || calculos.reembolsoIntegralPequenaRecebe > 0) && (
-                    <p className="text-xs text-cyan-300 font-semibold mt-1">
-                      • Reembolsos Integrais: Pequeno antecipou R$ {calculos.reembolsoIntegralPequenoRecebe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Pequena antecipou R$ {calculos.reembolsoIntegralPequenaRecebe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  )}
                 </div>
 
                 <div className="text-left md:text-right border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-6 border-slate-300 dark:border-slate-600 w-full md:w-auto">
@@ -1174,33 +1183,57 @@ export default function App() {
               </div>
             </div>
 
-            <div className={`p-4 sm:p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4 border-l-4 border-l-emerald-500`}>
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 sm:p-3 bg-emerald-100 text-emerald-600 rounded-xl shrink-0">
-                    <PiggyBank className="w-5 h-5 sm:w-6 sm:h-6"/>
+            {/* SEÇÃO DE ALERTAS E LIMITES DE ORÇAMENTO NO DASHBOARD */}
+            {Object.keys(limitesOrcamento).length > 0 && (
+              <div className={`p-4 sm:p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-3`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-400"/>
+                    <h3 className="font-bold text-sm sm:text-base">Alertas de Orçamento por Categoria</h3>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm">Reserva / Aportes</h3>
-                    <p className="text-[11px] text-slate-400">Total guardado no período.</p>
-                  </div>
+                  <span className="text-[11px] text-slate-400">Monitorando tetos definidos</span>
                 </div>
-                <div className="flex gap-4 text-left md:text-right w-full md:w-auto justify-between md:justify-end">
-                  <div>
-                    <span className="text-[10px] text-cyan-500 font-semibold block uppercase">Pequeno</span>
-                    <span className="text-xs sm:text-sm font-bold">R$ {(calculos.investidoPequeno + calculos.rendaExtraPequeno).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="border-l pl-3 sm:pl-4 border-slate-300 dark:border-slate-700">
-                    <span className="text-[10px] text-pink-500 font-semibold block uppercase">Pequena</span>
-                    <span className="text-xs sm:text-sm font-bold">R$ {(calculos.investidoPequena + calculos.rendaExtraPequena).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="border-l pl-3 sm:pl-4 border-slate-300 dark:border-slate-700">
-                    <span className="text-[10px] text-emerald-500 font-semibold block uppercase">Total</span>
-                    <span className="text-sm sm:text-base font-bold text-emerald-600">R$ {(calculos.totalInvestidoMes + calculos.totalRendaExtraMes).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {Object.entries(limitesOrcamento).map(([cat, limite]) => {
+                    const gastoAtual = calculos.gastosPorCategoria[cat] || 0;
+                    const percentual = limite > 0 ? (gastoAtual / limite) * 100 : 0;
+                    
+                    let corBarra = 'bg-emerald-500';
+                    let corTexto = 'text-emerald-400';
+                    let statusTexto = 'Dentro do teto';
+
+                    if (percentual >= 100) {
+                      corBarra = 'bg-rose-500';
+                      corTexto = 'text-rose-400';
+                      statusTexto = '🚨 Teto estourado!';
+                    } else if (percentual >= 80) {
+                      corBarra = 'bg-amber-500';
+                      corTexto = 'text-amber-400';
+                      statusTexto = '⚠️ Próximo ao limite';
+                    }
+
+                    return (
+                      <div key={cat} className={`p-3 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'} space-y-2`}>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-semibold truncate pr-2">{cat}</span>
+                          <span className={`font-bold shrink-0 ${corTexto}`}>
+                            R$ {gastoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / R$ {limite.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-300 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                          <div className={`${corBarra} h-full transition-all duration-500`} style={{ width: `${Math.min(100, percentual)}%` }}></div>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className={corTexto}>{statusTexto}</span>
+                          <span className="text-slate-400 font-medium">{percentual.toFixed(0)}% usado</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
+            )}
 
             <div className={`p-4 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
               <div className="flex items-center justify-between mb-2">
@@ -1303,6 +1336,49 @@ export default function App() {
                   Atualizar Minha Senha
                 </button>
               </form>
+            </div>
+
+            {/* GERENCIAMENTO DE LIMITES DE ORÇAMENTO */}
+            <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
+              <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500"/> Limites de Orçamento por Categoria
+              </h2>
+              <p className="text-xs text-slate-400">Defina tetos mensais para receber alertas visuais quando o gasto estiver perto ou acima do limite.</p>
+
+              <form onSubmit={handleSalvarLimiteOrcamento} className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                <select
+                  value={categoriaSelecionadaLimite}
+                  onChange={(e) => setCategoriaSelecionadaLimite(e.target.value)}
+                  className={`text-xs px-3 py-2 rounded-lg border font-semibold ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                >
+                  {categoriasOrdenadas.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <input 
+                  type="text" placeholder="Teto Mensal (R$ 0,00)"
+                  value={valorLimiteInput}
+                  onChange={(e) => setValorLimiteInput(formatarMoedaInput(e.target.value))}
+                  className={`text-xs px-3 py-2 rounded-lg border font-semibold ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                />
+                <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-xs font-semibold">
+                  Definir Teto
+                </button>
+              </form>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 max-h-60 overflow-y-auto">
+                {Object.entries(limitesOrcamento).map(([cat, limite]) => (
+                  <div key={cat} className={`flex justify-between items-center p-2.5 rounded-lg border ${modoEscuro ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                    <div>
+                      <span className="text-xs font-medium block">{cat}</span>
+                      <span className="text-[11px] font-bold text-amber-400">Teto: R$ {Number(limite).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <button onClick={() => removerLimiteOrcamento(cat)} className="text-slate-400 hover:text-rose-500 p-1">
+                      <Trash2 className="w-4 h-4"/>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
@@ -1422,7 +1498,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* SEÇÃO DE ATALHOS RÁPIDOS SEPARADOS POR PERFIL */}
               {!editandoTransacao && (
                 <div className="space-y-2 pb-3 border-b border-slate-200 dark:border-slate-700">
                   <div className="flex items-center justify-between">
