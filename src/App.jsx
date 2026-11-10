@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle, Repeat
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -206,15 +206,16 @@ export default function App() {
     localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
-  // FORMULÁRIO COM PAGADOR EM BRANCO POR PADRÃO
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
     categoria: CATEGORIAS_PADRAO[0],
-    pagador: '', // Em branco para seleção manual obrigatória
+    pagador: '',
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
+    eFixoRecorrente: false, // Novo campo para lançamento fixo recorrente
+    repeticoesFixas: 12,    // Meses de repetição para o fixo
     parcelas: 1,
     eAutofinanciamento: false,
     eReceita: false,
@@ -601,9 +602,9 @@ export default function App() {
 
     if (editandoTransacao) {
       let atualizarProximos = false;
-      if (editandoTransacao.grupoId || editandoTransacao.parcelas > 1) {
+      if (editandoTransacao.grupoId || editandoTransacao.parcelas > 1 || editandoTransacao.eFixoRecorrente) {
         atualizarProximos = window.confirm(
-          "Deseja aplicar esta alteração a este lançamento e a TODOS os próximos parcelamentos futuros deste grupo?"
+          "Deseja aplicar esta alteração a este lançamento e a TODOS os próximos meses futuros desta despesa?"
         );
       }
 
@@ -626,13 +627,13 @@ export default function App() {
             if (db && usuario) {
               updateDoc(doc(db, "transacoes", t.id), {
                 ...dadosAtualizados,
-                descricao: t.parcelas > 1 ? `${form.descricao} (${t.parcelaAtual}/${t.parcelas})` : form.descricao
+                descricao: t.eFixoRecorrente ? form.descricao : (t.parcelas > 1 ? `${form.descricao} (${t.parcelaAtual}/${t.parcelas})` : form.descricao)
               }).catch(err => console.error(err));
             }
             return {
               ...t,
               ...dadosAtualizados,
-              descricao: t.parcelas > 1 ? `${form.descricao} (${t.parcelaAtual}/${t.parcelas})` : form.descricao
+              descricao: t.eFixoRecorrente ? form.descricao : (t.parcelas > 1 ? `${form.descricao} (${t.parcelaAtual}/${t.parcelas})` : form.descricao)
             };
           }
           return t;
@@ -650,34 +651,43 @@ export default function App() {
 
       setEditandoTransacao(null);
     } else {
-      const numParcelas = Math.max(1, parseInt(form.parcelas) || 1);
-      const valorParcela = form.modoValor === 'fixo' 
+      const isFixo = form.eFixoRecorrente;
+      const numRepeticoes = isFixo 
+        ? Math.max(1, parseInt(form.repeticoesFixas) || 12) 
+        : Math.max(1, parseInt(form.parcelas) || 1);
+
+      const valorPorMes = form.modoValor === 'fixo' || isFixo
         ? valorNumerico 
-        : arredondar2(valorNumerico / numParcelas);
+        : arredondar2(valorNumerico / numRepeticoes);
 
       const [anoBase, mesBase] = form.mesCompetencia.split('-').map(Number);
       const novasTransacoes = [];
       const grupoId = `grupo-${Date.now()}`;
 
-      for (let i = 0; i < numParcelas; i++) {
+      for (let i = 0; i < numRepeticoes; i++) {
         let dataParcela = new Date(anoBase, mesBase - 1 + i, 5);
         let strAno = dataParcela.getFullYear();
         let strMes = String(dataParcela.getMonth() + 1).padStart(2, '0');
         let competenciaParcela = `${strAno}-${strMes}`;
         
         const isAutofin = form.categoria === 'Autofinanciamento (Devolução)';
+        const descricaoFinal = isFixo 
+          ? form.descricao 
+          : (numRepeticoes > 1 ? `${form.descricao} (${i + 1}/${numRepeticoes})` : form.descricao);
+
         const novaT = {
           data: `${strAno}-${strMes}-05`,
           mesCompetencia: competenciaParcela,
-          descricao: numParcelas > 1 ? `${form.descricao} (${i + 1}/${numParcelas})` : form.descricao,
-          valor: valorParcela,
+          descricao: descricaoFinal,
+          valor: valorPorMes,
           categoria: form.categoria,
           pagador: form.pagador,
           tipoDivisao: form.tipoDivisao,
           meioPagamento: form.meioPagamento,
-          parcelas: numParcelas,
-          parcelaAtual: i + 1,
-          grupoId: numParcelas > 1 || isAutofin ? grupoId : null,
+          parcelas: isFixo ? 1 : numRepeticoes,
+          parcelaAtual: isFixo ? 1 : i + 1,
+          eFixoRecorrente: isFixo,
+          grupoId: numRepeticoes > 1 || isFixo || isAutofin ? grupoId : null,
           eAutofinanciamento: isAutofin,
           eReceita: form.eReceita
         };
@@ -702,9 +712,11 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: categoriasOrdenadas[0] || '',
-      pagador: '', // Reseta para em branco
+      pagador: '',
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
+      eFixoRecorrente: false,
+      repeticoesFixas: 12,
       parcelas: 1,
       eAutofinanciamento: false,
       eReceita: false,
@@ -714,7 +726,7 @@ export default function App() {
 
   const iniciarEdicaoTransacao = (t) => {
     setEditandoTransacao(t);
-    const descLimpa = t.descricao.replace(/\s*\(\d+\/\d+\)$/, '');
+    const descLimpa = t.eFixoRecorrente ? t.descricao : t.descricao.replace(/\s*\(\d+\/\d+\)$/, '');
     
     setForm({
       descricao: descLimpa,
@@ -724,6 +736,8 @@ export default function App() {
       pagador: t.pagador || '',
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
+      eFixoRecorrente: t.eFixoRecorrente || false,
+      repeticoesFixas: 12,
       parcelas: t.parcelas || 1,
       eAutofinanciamento: t.eAutofinanciamento || false,
       eReceita: t.eReceita || false,
@@ -741,6 +755,8 @@ export default function App() {
       pagador: '',
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
+      eFixoRecorrente: false,
+      repeticoesFixas: 12,
       parcelas: 1,
       eAutofinanciamento: false,
       eReceita: false,
@@ -750,9 +766,9 @@ export default function App() {
 
   const removerTransacao = async (tAlvo) => {
     let excluirProximos = false;
-    if (tAlvo.grupoId || (tAlvo.parcelas && tAlvo.parcelas > 1)) {
+    if (tAlvo.grupoId || (tAlvo.parcelas && tAlvo.parcelas > 1) || tAlvo.eFixoRecorrente) {
       excluirProximos = window.confirm(
-        "Deseja excluir apenas esta parcela ou OK para excluir ESTA e TODAS as PRÓXIMAS parcelas deste grupo?"
+        "Deseja excluir apenas deste mês ou OK para excluir ESTE e TODOS os PRÓXIMOS meses futuros desta despesa?"
       );
     } else {
       if (!window.confirm("Deseja realmente excluir este lançamento?")) return;
@@ -1493,7 +1509,7 @@ export default function App() {
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição (ex: Calça no Shopping)"
+                  type="text" required placeholder="Descrição (ex: Aluguel / Internet)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
@@ -1524,7 +1540,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Competência</label>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Competência Inicial</label>
                   <input 
                     type="month"
                     value={form.mesCompetencia}
@@ -1562,7 +1578,7 @@ export default function App() {
                     <label className="text-[11px] text-slate-400 block mb-1">Tipo de Divisão</label>
                     <select
                       value={form.tipoDivisao} onChange={(e) => setForm({...form, tipoDivisao: e.target.value})}
-                      className={`w-full px-2 py-2 text-xs sm:text-sm rounded-lg border font-semibold ${form.tipoDivisao === '50/50' ? 'border-amber-500 text-amber-500' : form.tipoDivisao === 'reembolso_integral' ? 'border-cyan-500 text-cyan-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      className={`w-full px-2 py-2 text-xs sm:text-sm rounded-lg border font-semibold ${form.tipoDivisao === '50/50' ? 'border-amber-500 text-amber-500' : form.tipoDivisao === 'reembolso_integral' ? 'border-cyan-500 text-cyan-400' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                     >
                       <option value="individual">Individual (100%)</option>
                       <option value="50/50">Dividir 50/50 (Casal)</option>
@@ -1571,15 +1587,42 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11px] text-slate-400 block mb-1">
-                    {form.modoValor === 'fixo' ? 'Repetir por quantos meses?' : 'Quantidade de Parcelas'}
+                {/* OPÇÃO DE LANÇAMENTO FIXO RECORRENTE */}
+                <div className={`p-3 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-200'} space-y-2`}>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={form.eFixoRecorrente}
+                      onChange={(e) => setForm({...form, eFixoRecorrente: e.target.checked})}
+                      className="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500"
+                    />
+                    <span className="text-xs font-bold flex items-center gap-1 text-cyan-400">
+                      <Repeat className="w-3.5 h-3.5"/> Despesa Fixa / Recorrente Mensal
+                    </span>
                   </label>
-                  <input 
-                    type="number" min="1" max="48" disabled={editandoTransacao !== null}
-                    value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
-                    className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoTransacao !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                  />
+
+                  {form.eFixoRecorrente ? (
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Repetir por quantos meses à frente?</label>
+                      <input 
+                        type="number" min="1" max="60"
+                        value={form.repeticoesFixas}
+                        onChange={(e) => setForm({...form, repeticoesFixas: e.target.value})}
+                        className={`w-full px-3 py-1.5 text-xs rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">
+                        {form.modoValor === 'fixo' ? 'Repetir por quantos meses?' : 'Quantidade de Parcelas'}
+                      </label>
+                      <input 
+                        type="number" min="1" max="48" disabled={editandoTransacao !== null}
+                        value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
+                        className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoTransacao !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <button type="submit" className={`w-full font-semibold py-3 rounded-lg text-sm shadow-md transition-colors text-white ${editandoTransacao ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
@@ -1639,6 +1682,11 @@ export default function App() {
                             {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
                           </span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
+                          {t.eFixoRecorrente && (
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30 flex items-center gap-0.5">
+                              <Repeat className="w-2.5 h-2.5"/> Fixo
+                            </span>
+                          )}
                           {t.tipoDivisao === '50/50' && (
                             <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30">
                               50/50
