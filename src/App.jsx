@@ -214,9 +214,9 @@ export default function App() {
     pagador: '',
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
-    eFixoRecorrente: false, // Novo campo para lançamento fixo recorrente
-    repeticoesFixas: 12,    // Meses de repetição para o fixo
-    parcelas: 1,
+    eFixoRecorrente: false, // Despesa fixa mensal sem fim
+    eParcelado: false,      // Se marcado, exige quantidade de parcelas
+    parcelas: 2,            // Quantidade padrão se parcelado
     eAutofinanciamento: false,
     eReceita: false,
     mesCompetencia: '2026-11'
@@ -652,11 +652,12 @@ export default function App() {
       setEditandoTransacao(null);
     } else {
       const isFixo = form.eFixoRecorrente;
-      const numRepeticoes = isFixo 
-        ? Math.max(1, parseInt(form.repeticoesFixas) || 12) 
-        : Math.max(1, parseInt(form.parcelas) || 1);
+      const isParcelado = form.eParcelado;
 
-      const valorPorMes = form.modoValor === 'fixo' || isFixo
+      // Se for fixo, projeta para frente por 12 meses (padrão sem exigir número de parcelas). Se for parcelado, usa o número de parcelas informado.
+      const numRepeticoes = isFixo ? 12 : (isParcelado ? Math.max(1, parseInt(form.parcelas) || 1) : 1);
+
+      const valorPorMes = form.modoValor === 'fixo' || isFixo || !isParcelado
         ? valorNumerico 
         : arredondar2(valorNumerico / numRepeticoes);
 
@@ -671,9 +672,9 @@ export default function App() {
         let competenciaParcela = `${strAno}-${strMes}`;
         
         const isAutofin = form.categoria === 'Autofinanciamento (Devolução)';
-        const descricaoFinal = isFixo 
-          ? form.descricao 
-          : (numRepeticoes > 1 ? `${form.descricao} (${i + 1}/${numRepeticoes})` : form.descricao);
+        const descricaoFinal = isParcelado && numRepeticoes > 1
+          ? `${form.descricao} (${i + 1}/${numRepeticoes})` 
+          : form.descricao;
 
         const novaT = {
           data: `${strAno}-${strMes}-05`,
@@ -684,8 +685,8 @@ export default function App() {
           pagador: form.pagador,
           tipoDivisao: form.tipoDivisao,
           meioPagamento: form.meioPagamento,
-          parcelas: isFixo ? 1 : numRepeticoes,
-          parcelaAtual: isFixo ? 1 : i + 1,
+          parcelas: isParcelado ? numRepeticoes : 1,
+          parcelaAtual: isParcelado ? i + 1 : 1,
           eFixoRecorrente: isFixo,
           grupoId: numRepeticoes > 1 || isFixo || isAutofin ? grupoId : null,
           eAutofinanciamento: isAutofin,
@@ -716,8 +717,8 @@ export default function App() {
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
-      repeticoesFixas: 12,
-      parcelas: 1,
+      eParcelado: false,
+      parcelas: 2,
       eAutofinanciamento: false,
       eReceita: false,
       mesCompetencia: mesFiltro
@@ -737,8 +738,8 @@ export default function App() {
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
       eFixoRecorrente: t.eFixoRecorrente || false,
-      repeticoesFixas: 12,
-      parcelas: t.parcelas || 1,
+      eParcelado: (t.parcelas && t.parcelas > 1) || false,
+      parcelas: t.parcelas || 2,
       eAutofinanciamento: t.eAutofinanciamento || false,
       eReceita: t.eReceita || false,
       mesCompetencia: t.mesCompetencia || mesFiltro
@@ -756,8 +757,8 @@ export default function App() {
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
-      repeticoesFixas: 12,
-      parcelas: 1,
+      eParcelado: false,
+      parcelas: 2,
       eAutofinanciamento: false,
       eReceita: false,
       mesCompetencia: mesFiltro
@@ -1509,7 +1510,7 @@ export default function App() {
 
               <form onSubmit={handleSalvarTransacao} className="space-y-3">
                 <input 
-                  type="text" required placeholder="Descrição (ex: Aluguel / Internet)"
+                  type="text" required placeholder="Descrição (ex: Energia / Internet)"
                   value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})}
                   className={`w-full px-3 py-2.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                 />
@@ -1587,39 +1588,40 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* OPÇÃO DE LANÇAMENTO FIXO RECORRENTE */}
-                <div className={`p-3 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-200'} space-y-2`}>
+                {/* OPÇÕES DE RECORRÊNCIA OU PARCELAMENTO */}
+                <div className={`p-3 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-200'} space-y-3`}>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input 
                       type="checkbox"
                       checked={form.eFixoRecorrente}
-                      onChange={(e) => setForm({...form, eFixoRecorrente: e.target.checked})}
+                      onChange={(e) => setForm({...form, eFixoRecorrente: e.target.checked, eParcelado: false})}
                       className="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500"
                     />
                     <span className="text-xs font-bold flex items-center gap-1 text-cyan-400">
-                      <Repeat className="w-3.5 h-3.5"/> Despesa Fixa / Recorrente Mensal
+                      <Repeat className="w-3.5 h-3.5"/> Despesa Fixa / Recorrente Mensal (Sem fim)
                     </span>
                   </label>
 
-                  {form.eFixoRecorrente ? (
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Repetir por quantos meses à frente?</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={form.eParcelado}
+                      onChange={(e) => setForm({...form, eParcelado: e.target.checked, eFixoRecorrente: false})}
+                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                    />
+                    <span className="text-xs font-bold text-blue-400">
+                      📦 É uma compra parcelada (Com prazo determinado)
+                    </span>
+                  </label>
+
+                  {form.eParcelado && (
+                    <div className="pt-1">
+                      <label className="text-[10px] text-slate-400 block mb-1">Quantidade de Parcelas</label>
                       <input 
-                        type="number" min="1" max="60"
-                        value={form.repeticoesFixas}
-                        onChange={(e) => setForm({...form, repeticoesFixas: e.target.value})}
-                        className={`w-full px-3 py-1.5 text-xs rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">
-                        {form.modoValor === 'fixo' ? 'Repetir por quantos meses?' : 'Quantidade de Parcelas'}
-                      </label>
-                      <input 
-                        type="number" min="1" max="48" disabled={editandoTransacao !== null}
-                        value={form.parcelas} onChange={(e) => setForm({...form, parcelas: e.target.value})}
-                        className={`w-full px-3 py-2 text-sm rounded-lg border ${editandoTransacao !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                        type="number" min="2" max="60" disabled={editandoTransacao !== null}
+                        value={form.parcelas}
+                        onChange={(e) => setForm({...form, parcelas: e.target.value})}
+                        className={`w-full px-3 py-1.5 text-xs rounded-lg border ${editandoTransacao !== null ? 'opacity-50 cursor-not-allowed' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                       />
                     </div>
                   )}
