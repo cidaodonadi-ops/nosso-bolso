@@ -125,9 +125,29 @@ export default function App() {
   const [modoEsqueciSenha, setModoEsqueciSenha] = useState(false);
 
   const [perfis, setPerfis] = useState({
-    pequeno: { nome: 'Pequeno', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' },
-    pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
+    pequeno: { nome: 'Pequeno', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00', emailVinculado: '' },
+    pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00', emailVinculado: '' }
   });
+
+  // IDENTIFICAÇÃO DINÂMICA DO PERFIL LOGADO PARA O FILTRO PADRÃO
+  const perfilLogadoKey = useMemo(() => {
+    if (!usuario || !usuario.email) return 'pequeno';
+    const emailUser = usuario.email.toLowerCase();
+    if (perfis.pequena.emailVinculado && emailUser === perfis.pequena.emailVinculado.toLowerCase()) {
+      return 'pequena';
+    }
+    if (emailUser.includes('pequena') || emailUser.includes('wife')) return 'pequena';
+    return 'pequeno';
+  }, [usuario, perfis]);
+
+  const [filtroPessoa, setFiltroPessoa] = useState('pequeno');
+
+  // Atualiza o filtro padrão assim que o usuário loga e o perfil é reconhecido
+  useEffect(() => {
+    if (usuario) {
+      setFiltroPessoa(perfilLogadoKey);
+    }
+  }, [usuario, perfilLogadoKey]);
 
   const [categorias, setCategorias] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_categorias');
@@ -169,7 +189,6 @@ export default function App() {
 
   const [mesFiltro, setMesFiltro] = useState('2026-11');
   const [anoFiltro, setAnoFiltro] = useState('2026');
-  const [filtroPessoa, setFiltroPessoa] = useState('todos');
   const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
@@ -206,6 +225,7 @@ export default function App() {
     localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
+  // FORMULÁRIO COM DATA DE VENCIMENTO EM BRANCO (OPCIONAL)
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
@@ -217,7 +237,7 @@ export default function App() {
     eFixoRecorrente: false,
     eParcelado: false,
     parcelas: 2,
-    diaVencimento: '10', 
+    diaVencimento: '', // Em branco e opcional por padrão
     eAutofinanciamento: false,
     eReceita: false,
     mesCompetencia: '2026-11'
@@ -413,7 +433,6 @@ export default function App() {
     });
   }, [transacoesDoMes, filtroPessoa]);
 
-  // FILTROS EXCLUSIVOS PARA A ABA DE CONTAS FIXAS
   const contasFixasDoMes = useMemo(() => {
     return transacoes.filter(t => {
       const matchMes = t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro));
@@ -435,7 +454,8 @@ export default function App() {
     if (mesFiltro !== mesAtualStr) return [];
 
     return transacoesDoMes.filter(t => {
-      if (!t.diaVencimento) return false;
+      // SÓ ENTRA NO FLUXO DE LEMBRETE SE O DIA DE VENCIMENTO ESTIVER PREENCHIDO
+      if (t.diaVencimento === null || t.diaVencimento === undefined || t.diaVencimento === '') return false;
       
       if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') {
         return false;
@@ -457,6 +477,7 @@ export default function App() {
 
   const transacoesDashboardAtivas = modoVisualizacaoDashboard === 'mes' ? transacoesDoMes : transacoesDoAno;
 
+  // CÁLCULOS ATUALIZADOS COM O ABATIMENTO CORRETO DE REEMBOLSOS E 50/50
   const calculos = useMemo(() => {
     let gastosPequenoSalario = 0;
     let gastosPequenaSalario = 0;
@@ -487,6 +508,7 @@ export default function App() {
       }
     });
 
+    // CÁLCULO PRECISO DO ACENTO PIX (50/50 E REEMBOLSOS CRUZADOS)
     transacoesDoMes.forEach(t => {
       if (t.eReceita) return;
       const valor = arredondar2(t.valor);
@@ -499,8 +521,10 @@ export default function App() {
         }
       } else if (t.tipoDivisao === 'reembolso_integral') {
         if (t.pagador === 'pequeno') {
+          // Pequeno pagou despesa integral que a Pequena precisa devolver
           reembolsoIntegralPequenoRecebe += valor;
         } else if (t.pagador === 'pequena') {
+          // Pequena pagou despesa integral que o Pequeno precisa devolver
           reembolsoIntegralPequenaRecebe += valor;
         }
       }
@@ -590,7 +614,10 @@ export default function App() {
     const totalGasto5050Mes = arredondar2(totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50);
     const parteIdealCadaUm = arredondar2(totalGasto5050Mes / 2);
     
+    // Saldo líquido 50/50 do Pequeno (+ positivo significa que Pequeno tem direito a receber)
     const saldoLiquido5050Pequeno = arredondar2(totalPagoPeloPequenoEm50_50 - parteIdealCadaUm);
+    
+    // SOMA FINAL: Saldo 50/50 + o que Pequeno deve receber de reembolso integral - o que Pequeno deve pagar de reembolso integral para a Pequena
     const saldoLiquidoPequeno = arredondar2(
       saldoLiquido5050Pequeno + reembolsoIntegralPequenoRecebe - reembolsoIntegralPequenaRecebe
     );
@@ -756,7 +783,7 @@ export default function App() {
       eFixoRecorrente: false,
       eParcelado: false,
       parcelas: 2,
-      diaVencimento: '10',
+      diaVencimento: '',
       eAutofinanciamento: false,
       eReceita: false,
       mesCompetencia: mesFiltro
@@ -778,7 +805,7 @@ export default function App() {
       eFixoRecorrente: t.eFixoRecorrente || false,
       eParcelado: (t.parcelas && t.parcelas > 1) || false,
       parcelas: t.parcelas || 2,
-      diaVencimento: t.diaVencimento ? String(t.diaVencimento) : '10',
+      diaVencimento: t.diaVencimento ? String(t.diaVencimento) : '',
       eAutofinanciamento: t.eAutofinanciamento || false,
       eReceita: t.eReceita || false,
       mesCompetencia: t.mesCompetencia || mesFiltro
@@ -798,7 +825,7 @@ export default function App() {
       eFixoRecorrente: false,
       eParcelado: false,
       parcelas: 2,
-      diaVencimento: '10',
+      diaVencimento: '',
       eAutofinanciamento: false,
       eReceita: false,
       mesCompetencia: mesFiltro
@@ -1047,9 +1074,9 @@ export default function App() {
           </div>
           <div className="flex gap-1.5 w-full sm:w-auto">
             {[
-              { id: 'todos', label: 'Casal (Ambos)' },
               { id: 'pequeno', label: 'Pequeno' },
-              { id: 'pequena', label: 'Pequena' }
+              { id: 'pequena', label: 'Pequena' },
+              { id: 'todos', label: 'Casal (Ambos)' }
             ].map(f => (
               <button
                 key={f.id}
@@ -1332,7 +1359,6 @@ export default function App() {
           </div>
         )}
 
-        {/* NOVA ABA: CONTAS FIXAS */}
         {abaAtiva === 'fixas' && (
           <div className="space-y-4">
             <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
@@ -1529,6 +1555,16 @@ export default function App() {
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
                       </div>
+                      <div>
+                        <label className="text-xs text-slate-500 block">E-mail de Login Vinculado</label>
+                        <input 
+                          type="email" placeholder="email@exemplo.com" value={p.emailVinculado || ''}
+                          onChange={(e) => {
+                            setPerfis({ ...perfis, [perfilKey]: { ...p, emailVinculado: e.target.value } });
+                          }}
+                          className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -1699,7 +1735,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Dia Vencimento</label>
+                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Dia Vencimento (Opcional)</label>
                     <input 
                       type="number" min="1" max="31" placeholder="Ex: 10"
                       value={form.diaVencimento}
