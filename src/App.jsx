@@ -206,13 +206,12 @@ export default function App() {
     localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
-  // FORMULÁRIO COM PAGADOR EM BRANCO ("SELECIONE...") POR PADRÃO
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
     categoria: '', 
-    pagador: '', // Em branco para escolha manual obrigatória
+    pagador: '', 
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
     eFixoRecorrente: false,
@@ -414,7 +413,20 @@ export default function App() {
     });
   }, [transacoesDoMes, filtroPessoa]);
 
-  // CONTROLE DE VENCIMENTOS FILTRADO PELO USUÁRIO SELECIONADO NO DASHBOARD
+  // FILTROS EXCLUSIVOS PARA A ABA DE CONTAS FIXAS
+  const contasFixasDoMes = useMemo(() => {
+    return transacoes.filter(t => {
+      const matchMes = t.mesCompetencia ? t.mesCompetencia === mesFiltro : (t.data && t.data.startsWith(mesFiltro));
+      if (!matchMes || !t.eFixoRecorrente) return false;
+      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') return false;
+      return true;
+    });
+  }, [transacoes, mesFiltro, filtroPessoa]);
+
+  const totalContasFixasMes = useMemo(() => {
+    return contasFixasDoMes.reduce((acc, t) => acc + arredondar2(t.valor), 0);
+  }, [contasFixasDoMes]);
+
   const contasProximasVencimento = useMemo(() => {
     const hoje = new Date();
     const diaAtual = hoje.getDate();
@@ -425,14 +437,12 @@ export default function App() {
     return transacoesDoMes.filter(t => {
       if (!t.diaVencimento) return false;
       
-      // Se houver um filtro de pessoa ativo (Pequeno ou Pequena), filtra apenas as contas dele(a)
       if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') {
         return false;
       }
 
       const diaVenc = Number(t.diaVencimento);
       const diasRestantes = diaVenc - diaAtual;
-      // Alerta para contas que vencem hoje ou nos próximos 5 dias
       return diasRestantes >= 0 && diasRestantes <= 5;
     });
   }, [transacoesDoMes, mesFiltro, filtroPessoa]);
@@ -740,7 +750,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: '', // Reseta para "Selecione..."
+      pagador: '', 
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
@@ -1060,6 +1070,7 @@ export default function App() {
           {[
             { id: 'dashboard', label: 'Dashboard', icon: Wallet },
             { id: 'lancamentos', label: 'Lançamentos', icon: PlusCircle },
+            { id: 'fixas', label: 'Contas Fixas', icon: Repeat },
             { id: 'viagens', label: 'Caixinha Viagem', icon: Plane },
             { id: 'config', label: 'Configurações', icon: Settings }
           ].map(aba => {
@@ -1110,7 +1121,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* ALERTA INTELIGENTE DE VENCIMENTOS VINCULADO AO FILTRO DO USUÁRIO */}
             {contasProximasVencimento.length > 0 && modoVisualizacaoDashboard === 'mes' && (
               <div className="p-4 rounded-2xl border border-amber-500/50 bg-amber-500/10 shadow-md space-y-2">
                 <div className="flex items-center gap-2 text-amber-400 font-bold text-xs sm:text-sm">
@@ -1318,6 +1328,73 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* NOVA ABA: CONTAS FIXAS */}
+        {abaAtiva === 'fixas' && (
+          <div className="space-y-4">
+            <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-4`}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-cyan-100 text-cyan-600 rounded-xl">
+                    <Repeat className="w-6 h-6"/>
+                  </div>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold">Resumo de Contas Fixas e Recorrentes</h2>
+                    <p className="text-xs text-slate-400">Competência: {mesFiltro} {filtroPessoa !== 'todos' && `(${filtroPessoa})`}</p>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right w-full sm:w-auto p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+                  <span className="text-[10px] text-cyan-400 font-semibold block uppercase">Total Comprometido (Fixas)</span>
+                  <span className="text-base sm:text-xl font-bold text-cyan-400">
+                    R$ {totalContasFixasMes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 pt-2">
+                {contasFixasDoMes.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-8 text-center">Nenhuma conta fixa ou recorrente encontrada para este período e filtro.</p>
+                ) : (
+                  contasFixasDoMes.map(t => (
+                    <div key={t.id} className={`p-3.5 rounded-xl border ${modoEscuro ? 'bg-slate-700/40 border-slate-600' : 'bg-slate-50 border-slate-200'} flex items-center justify-between shadow-sm`}>
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${t.pagador === 'pequeno' ? 'bg-cyan-100 text-cyan-800' : 'bg-pink-100 text-pink-800'}`}>
+                            {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
+                          {t.diaVencimento && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold border border-amber-500/30">
+                              Vence dia {t.diaVencimento}
+                            </span>
+                          )}
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30 flex items-center gap-0.5">
+                            <Repeat className="w-2.5 h-2.5"/> Fixo Mensal
+                          </span>
+                        </div>
+                        <span className="font-semibold text-xs sm:text-sm block mt-1.5">{t.descricao}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-xs sm:text-sm block">
+                          R$ {Number(t.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        <button 
+                          onClick={() => {
+                            iniciarEdicaoTransacao(t);
+                            setAbaAtiva('lancamentos');
+                          }}
+                          className="text-[10px] text-cyan-400 hover:underline mt-1 block"
+                        >
+                          Editar / Ver
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}
