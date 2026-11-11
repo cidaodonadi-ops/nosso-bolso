@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle, Repeat
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle, Repeat, BellRing
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -125,9 +125,20 @@ export default function App() {
   const [modoEsqueciSenha, setModoEsqueciSenha] = useState(false);
 
   const [perfis, setPerfis] = useState({
-    pequeno: { nome: 'Pequeno', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' },
-    pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
+    pequeno: { nome: 'Pequeno', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00', emailVinculado: '' },
+    pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00', emailVinculado: '' }
   });
+
+  // IDENTIFICAÇÃO AUTOMÁTICA DO PERFIL COM BASE NO E-MAIL LOGADO
+  const perfilLogadoKey = useMemo(() => {
+    if (!usuario || !usuario.email) return 'pequeno';
+    const emailUser = usuario.email.toLowerCase();
+    if (perfis.pequena.emailVinculado && emailUser === perfis.pequena.emailVinculado.toLowerCase()) {
+      return 'pequena';
+    }
+    if (emailUser.includes('pequena') || emailUser.includes('wife')) return 'pequena';
+    return 'pequeno';
+  }, [usuario, perfis]);
 
   const [categorias, setCategorias] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_categorias');
@@ -159,7 +170,6 @@ export default function App() {
   const [transacoes, setTransacoes] = useState([]);
   const [abaAtiva, setAbaAtiva] = useState('dashboard');
   const [modoVisualizacaoDashboard, setModoVisualizacaoDashboard] = useState('mes');
-  const [statusAviso, setStatusAviso] = useState({ tipo: '', mensagem: '' });
   const [editandoTransacao, setEditandoTransacao] = useState(null);
 
   const [modoEscuro, setModoEscuro] = useState(() => {
@@ -207,22 +217,30 @@ export default function App() {
     localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
-  // FORMULÁRIO COM PAGADOR E CATEGORIA EM BRANCO POR PADRÃO
+  // FORMULÁRIO COM PAGADOR PRÉ-PREENCHIDO PELO USUÁRIO LOGADO E DIA DE VENCIMENTO
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
-    categoria: '', // Em branco para seleção manual obrigatória
-    pagador: '', // Em branco para seleção manual obrigatória
+    categoria: '', 
+    pagador: perfilLogadoKey, // Preenchido automaticamente pelo usuário logado
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
     eFixoRecorrente: false,
     eParcelado: false,
     parcelas: 2,
+    diaVencimento: '10', // Dia padrão de vencimento
     eAutofinanciamento: false,
     eReceita: false,
     mesCompetencia: '2026-11'
   });
+
+  // Atualiza o pagador automaticamente se o usuário logado mudar
+  useEffect(() => {
+    if (!editandoTransacao && perfilLogadoKey) {
+      setForm(prev => ({ ...prev, pagador: perfilLogadoKey }));
+    }
+  }, [perfilLogadoKey, editandoTransacao]);
 
   const alternarTema = () => {
     setModoEscuro(prev => {
@@ -236,7 +254,6 @@ export default function App() {
     return [...categorias].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
   }, [categorias]);
 
-  // CORRIGIDO: Persistência de sessão mantendo o app sem refresh indesejado na tela de login
   useEffect(() => {
     if (!auth) {
       setCarregandoAuth(false);
@@ -414,6 +431,23 @@ export default function App() {
       return true;
     });
   }, [transacoesDoMes, filtroPessoa]);
+
+  // CONTROLE INTELIGENTE DE CONTAS PRÓXIMAS AO VENCIMENTO NO MÊS ATUAL
+  const contasProximasVencimento = useMemo(() => {
+    const hoje = new Date();
+    const diaAtual = hoje.getDate();
+    const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+
+    if (mesFiltro !== mesAtualStr) return [];
+
+    return transacoesDoMes.filter(t => {
+      if (!t.diaVencimento) return false;
+      const diaVenc = Number(t.diaVencimento);
+      const diasRestantes = diaVenc - diaAtual;
+      // Alerta para contas que vencem hoje ou nos próximos 5 dias, e que ainda não passaram
+      return diasRestantes >= 0 && diasRestantes <= 5;
+    });
+  }, [transacoesDoMes, mesFiltro]);
 
   const transacoesDoAno = useMemo(() => {
     return transacoes.filter(t => {
@@ -616,8 +650,8 @@ export default function App() {
         categoria: form.categoria,
         pagador: form.pagador,
         tipoDivisao: form.tipoDivisao,
-        meioPagamento: form.meioPagamento
-        // CORRIGIDO: mesCompetencia NÃO é sobrescrito globalmente, preservando cada mês original do grupo
+        meioPagamento: form.meioPagamento,
+        diaVencimento: form.diaVencimento ? Number(form.diaVencimento) : null
       };
 
       if (atualizarProximos && editandoTransacao.grupoId) {
@@ -689,6 +723,7 @@ export default function App() {
           pagador: form.pagador,
           tipoDivisao: form.tipoDivisao,
           meioPagamento: form.meioPagamento,
+          diaVencimento: form.diaVencimento ? Number(form.diaVencimento) : null,
           parcelas: isParcelado ? numRepeticoes : 1,
           parcelaAtual: isParcelado ? i + 1 : 1,
           eFixoRecorrente: isFixo,
@@ -717,12 +752,13 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: '',
+      pagador: perfilLogadoKey,
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
       eParcelado: false,
       parcelas: 2,
+      diaVencimento: '10',
       eAutofinanciamento: false,
       eReceita: false,
       mesCompetencia: mesFiltro
@@ -738,12 +774,13 @@ export default function App() {
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       modoValor: 'fixo',
       categoria: t.categoria || '',
-      pagador: t.pagador || '',
+      pagador: t.pagador || perfilLogadoKey,
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
       eFixoRecorrente: t.eFixoRecorrente || false,
       eParcelado: (t.parcelas && t.parcelas > 1) || false,
       parcelas: t.parcelas || 2,
+      diaVencimento: t.diaVencimento ? String(t.diaVencimento) : '10',
       eAutofinanciamento: t.eAutofinanciamento || false,
       eReceita: t.eReceita || false,
       mesCompetencia: t.mesCompetencia || mesFiltro
@@ -757,12 +794,13 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: '',
+      pagador: perfilLogadoKey,
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
       eParcelado: false,
       parcelas: 2,
+      diaVencimento: '10',
       eAutofinanciamento: false,
       eReceita: false,
       mesCompetencia: mesFiltro
@@ -1084,6 +1122,31 @@ export default function App() {
               </div>
             </div>
 
+            {/* ALERTA INTELIGENTE DE VENCIMENTOS PRÓXIMOS */}
+            {contasProximasVencimento.length > 0 && modoVisualizacaoDashboard === 'mes' && (
+              <div className="p-4 rounded-2xl border border-amber-500/50 bg-amber-500/10 shadow-md space-y-2">
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-xs sm:text-sm">
+                  <BellRing className="w-4 h-4 animate-bounce"/>
+                  <span>Contas Próximas ao Vencimento ({mesFiltro})</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {contasProximasVencimento.map(c => {
+                    const hojeDia = new Date().getDate();
+                    const diasRestantes = c.diaVencimento - hojeDia;
+                    return (
+                      <div key={c.id} className="p-2.5 rounded-xl border border-amber-500/30 bg-slate-800/40 flex justify-between items-center text-xs">
+                        <div>
+                          <span className="font-bold block text-slate-200">{c.descricao}</span>
+                          <span className="text-[10px] text-amber-300">Vence dia {c.diaVencimento} ({diasRestantes === 0 ? 'Vence hoje!' : `Faltam ${diasRestantes} dia(s)`})</span>
+                        </div>
+                        <span className="font-bold text-amber-400">R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className={`p-4 sm:p-5 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-3 border-l-4 border-l-cyan-500`}>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
@@ -1396,6 +1459,16 @@ export default function App() {
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
                       </div>
+                      <div>
+                        <label className="text-xs text-slate-500 block">E-mail de Login Vinculado</label>
+                        <input 
+                          type="email" placeholder="email@exemplo.com" value={p.emailVinculado || ''}
+                          onChange={(e) => {
+                            setPerfis({ ...perfis, [perfilKey]: { ...p, emailVinculado: e.target.value } });
+                          }}
+                          className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -1555,14 +1628,25 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Competência Inicial</label>
-                  <input 
-                    type="month"
-                    value={form.mesCompetencia}
-                    onChange={(e) => setForm({...form, mesCompetencia: e.target.value})}
-                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Competência Inicial</label>
+                    <input 
+                      type="month"
+                      value={form.mesCompetencia}
+                      onChange={(e) => setForm({...form, mesCompetencia: e.target.value})}
+                      className={`w-full px-3 py-2 text-xs sm:text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Dia Vencimento</label>
+                    <input 
+                      type="number" min="1" max="31" placeholder="Ex: 10"
+                      value={form.diaVencimento}
+                      onChange={(e) => setForm({...form, diaVencimento: e.target.value})}
+                      className={`w-full px-3 py-2 text-xs sm:text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    />
+                  </div>
                 </div>
                 
                 <div>
@@ -1700,18 +1784,23 @@ export default function App() {
                             {t.pagador === 'pequeno' ? 'Pequeno' : 'Pequena'}
                           </span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{t.categoria}</span>
+                          {t.diaVencimento && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold border border-amber-500/30">
+                              Vence dia {t.diaVencimento}
+                            </span>
+                          )}
                           {t.eFixoRecorrente && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30 flex items-center gap-0.5">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30 flex items-center gap-0.5">
                               <Repeat className="w-2.5 h-2.5"/> Fixo
                             </span>
                           )}
                           {t.tipoDivisao === '50/50' && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold border border-amber-500/30">
                               50/50
                             </span>
                           )}
                           {t.tipoDivisao === 'reembolso_integral' && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30">
                               Reembolso Integral (PIX)
                             </span>
                           )}
