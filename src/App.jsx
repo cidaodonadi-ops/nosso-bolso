@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle, Repeat, BellRing
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle, Repeat, BellRing, BarChart3
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -129,7 +129,6 @@ export default function App() {
     pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00', emailVinculado: '' }
   });
 
-  // IDENTIFICAÇÃO DINÂMICA DO PERFIL LOGADO PARA O FILTRO PADRÃO
   const perfilLogadoKey = useMemo(() => {
     if (!usuario || !usuario.email) return 'pequeno';
     const emailUser = usuario.email.toLowerCase();
@@ -142,7 +141,6 @@ export default function App() {
 
   const [filtroPessoa, setFiltroPessoa] = useState('pequeno');
 
-  // Atualiza o filtro padrão assim que o usuário loga e o perfil é reconhecido
   useEffect(() => {
     if (usuario) {
       setFiltroPessoa(perfilLogadoKey);
@@ -190,6 +188,10 @@ export default function App() {
   const [mesFiltro, setMesFiltro] = useState('2026-11');
   const [anoFiltro, setAnoFiltro] = useState('2026');
   const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
+  
+  // NOVO ESTADO: Filtro de pessoa exclusivo para a aba de Lançamentos (inicia com o logado)
+  const [filtroPessoaLancamentos, setFiltroPessoaLancamentos] = useState('meus');
+
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
   const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
@@ -225,23 +227,30 @@ export default function App() {
     localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
-  // FORMULÁRIO COM DATA DE VENCIMENTO EM BRANCO (OPCIONAL)
+  // FORMULÁRIO COM O "QUEM PAGOU?" PRÉ-PREENCHIDO COM O USUÁRIO LOGADO
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
     categoria: '', 
-    pagador: '', 
+    pagador: perfilLogadoKey, // PRÉ-PREENCHIDO AUTOMATICAMENTE
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
     eFixoRecorrente: false,
     eParcelado: false,
     parcelas: 2,
-    diaVencimento: '', // Em branco e opcional por padrão
+    diaVencimento: '',
     eAutofinanciamento: false,
     eReceita: false,
     mesCompetencia: '2026-11'
   });
+
+  // Atualiza o formulário padrão caso o perfil logado seja reconhecido após montagem
+  useEffect(() => {
+    if (!editandoTransacao) {
+      setForm(prev => ({ ...prev, pagador: perfilLogadoKey }));
+    }
+  }, [perfilLogadoKey]);
 
   const alternarTema = () => {
     setModoEscuro(prev => {
@@ -426,12 +435,19 @@ export default function App() {
     });
   }, [transacoes, mesFiltro, filtroCategoriaLancamentos]);
 
+  // FILTRAGEM DOS LANÇAMENTOS RESPEITANDO O USUÁRIO LOGADO OU O SELECIONADO NA ABA
   const transacoesDoMesFiltradasPorPessoa = useMemo(() => {
     return transacoesDoMes.filter(t => {
-      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') return false;
+      if (filtroPessoaLancamentos === 'meus') {
+        if (t.pagador !== perfilLogadoKey) return false;
+      } else if (filtroPessoaLancamentos === 'outro') {
+        const outroPerfil = perfilLogadoKey === 'pequeno' ? 'pequena' : 'pequeno';
+        if (t.pagador !== outroPerfil) return false;
+      }
+      // Se for 'todos', traz tudo do mês
       return true;
     });
-  }, [transacoesDoMes, filtroPessoa]);
+  }, [transacoesDoMes, filtroPessoaLancamentos, perfilLogadoKey]);
 
   const contasFixasDoMes = useMemo(() => {
     return transacoes.filter(t => {
@@ -454,7 +470,6 @@ export default function App() {
     if (mesFiltro !== mesAtualStr) return [];
 
     return transacoesDoMes.filter(t => {
-      // SÓ ENTRA NO FLUXO DE LEMBRETE SE O DIA DE VENCIMENTO ESTIVER PREENCHIDO
       if (t.diaVencimento === null || t.diaVencimento === undefined || t.diaVencimento === '') return false;
       
       if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') {
@@ -477,7 +492,6 @@ export default function App() {
 
   const transacoesDashboardAtivas = modoVisualizacaoDashboard === 'mes' ? transacoesDoMes : transacoesDoAno;
 
-  // CÁLCULOS ATUALIZADOS COM O ABATIMENTO CORRETO DE REEMBOLSOS E 50/50
   const calculos = useMemo(() => {
     let gastosPequenoSalario = 0;
     let gastosPequenaSalario = 0;
@@ -508,7 +522,6 @@ export default function App() {
       }
     });
 
-    // CÁLCULO PRECISO DO ACENTO PIX (50/50 E REEMBOLSOS CRUZADOS)
     transacoesDoMes.forEach(t => {
       if (t.eReceita) return;
       const valor = arredondar2(t.valor);
@@ -521,10 +534,8 @@ export default function App() {
         }
       } else if (t.tipoDivisao === 'reembolso_integral') {
         if (t.pagador === 'pequeno') {
-          // Pequeno pagou despesa integral que a Pequena precisa devolver
           reembolsoIntegralPequenoRecebe += valor;
         } else if (t.pagador === 'pequena') {
-          // Pequena pagou despesa integral que o Pequeno precisa devolver
           reembolsoIntegralPequenaRecebe += valor;
         }
       }
@@ -614,10 +625,7 @@ export default function App() {
     const totalGasto5050Mes = arredondar2(totalPagoPeloPequenoEm50_50 + totalPagoPelaPequenaEm50_50);
     const parteIdealCadaUm = arredondar2(totalGasto5050Mes / 2);
     
-    // Saldo líquido 50/50 do Pequeno (+ positivo significa que Pequeno tem direito a receber)
     const saldoLiquido5050Pequeno = arredondar2(totalPagoPeloPequenoEm50_50 - parteIdealCadaUm);
-    
-    // SOMA FINAL: Saldo 50/50 + o que Pequeno deve receber de reembolso integral - o que Pequeno deve pagar de reembolso integral para a Pequena
     const saldoLiquidoPequeno = arredondar2(
       saldoLiquido5050Pequeno + reembolsoIntegralPequenoRecebe - reembolsoIntegralPequenaRecebe
     );
@@ -777,7 +785,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: '', 
+      pagador: perfilLogadoKey, // Mantém o usuário logado como padrão para o próximo
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
@@ -799,7 +807,7 @@ export default function App() {
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       modoValor: 'fixo',
       categoria: t.categoria || '',
-      pagador: t.pagador || '',
+      pagador: t.pagador || perfilLogadoKey,
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
       eFixoRecorrente: t.eFixoRecorrente || false,
@@ -819,7 +827,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: '',
+      pagador: perfilLogadoKey,
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
@@ -1098,6 +1106,7 @@ export default function App() {
             { id: 'dashboard', label: 'Dashboard', icon: Wallet },
             { id: 'lancamentos', label: 'Lançamentos', icon: PlusCircle },
             { id: 'fixas', label: 'Contas Fixas', icon: Repeat },
+            { id: 'relatorios', label: 'Relatórios', icon: BarChart3 },
             { id: 'viagens', label: 'Caixinha Viagem', icon: Plane },
             { id: 'config', label: 'Configurações', icon: Settings }
           ].map(aba => {
@@ -1420,6 +1429,76 @@ export default function App() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* NOVA ABA: RELATÓRIOS VISUAIS */}
+        {abaAtiva === 'relatorios' && (
+          <div className="space-y-4">
+            <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-5`}>
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl">
+                  <BarChart3 className="w-6 h-6"/>
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold">Relatórios Visuais e Indicadores</h2>
+                  <p className="text-xs text-slate-400">Competência Analisada: {mesFiltro}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-200'} space-y-3`}>
+                  <h3 className="text-xs font-bold uppercase text-slate-400 tracking-wider">Balanço Geral de Injeção no Mês</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-cyan-400 font-semibold">Total Comprometido pelo Pequeno:</span>
+                      <span className="font-bold">R$ {calculos.gastosPequenoSalario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-pink-400 font-semibold">Total Comprometido pela Pequena:</span>
+                      <span className="font-bold">R$ {calculos.gastosPequenaSalario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-600/40 flex justify-between items-center text-xs">
+                      <span className="font-bold">Soma dos Gastos do Casal:</span>
+                      <span className="font-bold text-base">R$ {calculos.gastosSalarioTotais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-200'} space-y-3`}>
+                  <h3 className="text-xs font-bold uppercase text-slate-400 tracking-wider">Investimentos & Caixinhas</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold">Total Aportado em Investimentos:</span>
+                      <span className="font-bold text-emerald-400">R$ {calculos.totalInvestidoMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold">Caixinha Viagem / Férias Acumulada:</span>
+                      <span className="font-bold text-cyan-400">R$ {calculos.caixinhaViagens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-200'} space-y-3`}>
+                <h3 className="text-xs font-bold uppercase text-slate-400 tracking-wider">Top Categorias de Despesa ({mesFiltro})</h3>
+                <div className="space-y-2">
+                  {Object.keys(calculos.gastosPorCategoria).length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">Nenhum dado para exibir neste mês.</p>
+                  ) : (
+                    Object.entries(calculos.gastosPorCategoria)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 5)
+                      .map(([cat, val]) => (
+                        <div key={cat} className="flex justify-between items-center text-xs py-1 border-b border-slate-600/20 last:border-0">
+                          <span className="font-medium">{cat}</span>
+                          <span className="font-bold">R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1830,42 +1909,71 @@ export default function App() {
             </div>
 
             <div className="md:col-span-2 space-y-4">
-              <div className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Filter className="w-4 h-4 text-cyan-500 shrink-0"/>
-                  <span className="text-xs font-bold text-slate-500">Filtrar Categoria:</span>
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <select
-                    value={filtroCategoriaLancamentos}
-                    onChange={(e) => setFiltroCategoriaLancamentos(e.target.value)}
-                    className={`text-xs px-3 py-1.5 rounded-lg border font-semibold w-full sm:w-64 ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}
-                  >
-                    <option value="todas">Todas as Categorias</option>
-                    {categoriasOrdenadas.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+              {/* FILTROS DA ABA DE LANÇAMENTOS (PESSOA E CATEGORIA) */}
+              <div className={`p-3 rounded-xl border flex flex-col gap-2.5 ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-cyan-500 shrink-0"/>
+                    <span className="text-xs font-bold text-slate-500">Exibir Lançamentos de:</span>
+                  </div>
+                  <div className="flex gap-1">
+                    {[
+                      { id: 'meus', label: `Meus (${perfis[perfilLogadoKey].nome})` },
+                      { id: 'outro', label: 'Outro' },
+                      { id: 'todos', label: 'Todos do Casal' }
+                    ].map(fp => (
+                      <button
+                        key={fp.id}
+                        onClick={() => setFiltroPessoaLancamentos(fp.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                          filtroPessoaLancamentos === fp.id
+                            ? 'bg-cyan-600 text-white shadow-sm'
+                            : modoEscuro ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {fp.label}
+                      </button>
                     ))}
-                  </select>
-                  {filtroCategoriaLancamentos !== 'todas' && (
-                    <button 
-                      onClick={() => setFiltroCategoriaLancamentos('todas')}
-                      className="px-2.5 py-1 text-xs rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 font-semibold"
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-cyan-500 shrink-0"/>
+                    <span className="text-xs font-bold text-slate-500">Categoria:</span>
+                  </div>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <select
+                      value={filtroCategoriaLancamentos}
+                      onChange={(e) => setFiltroCategoriaLancamentos(e.target.value)}
+                      className={`text-xs px-3 py-1.5 rounded-lg border font-semibold w-full sm:w-56 ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}
                     >
-                      Limpar Filtro
-                    </button>
-                  )}
+                      <option value="todas">Todas as Categorias</option>
+                      {categoriasOrdenadas.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    {filtroCategoriaLancamentos !== 'todas' && (
+                      <button 
+                        onClick={() => setFiltroCategoriaLancamentos('todas')}
+                        className="px-2.5 py-1 text-xs rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 font-semibold"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-xs sm:text-sm text-slate-500">
-                  Lançamentos: {mesFiltro} {filtroCategoriaLancamentos !== 'todas' && `(${filtroCategoriaLancamentos})`}
+                  Lançamentos ({mesFiltro})
                 </h3>
                 <span className="text-[11px] font-semibold text-slate-400">{transacoesDoMesFiltradasPorPessoa.length} item(ns)</span>
               </div>
 
               {transacoesDoMesFiltradasPorPessoa.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum lançamento encontrado para este filtro.</p>
+                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum lançamento encontrado para este filtro e período.</p>
               ) : (
                 transacoesDoMesFiltradasPorPessoa.map(t => {
                   const valorExibido = (t.tipoDivisao === '50/50' && filtroPessoa !== 'todos') 
