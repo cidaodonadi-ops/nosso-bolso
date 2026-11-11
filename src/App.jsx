@@ -117,6 +117,7 @@ const extrairDadosPorVoz = (texto, categorias) => {
 
 export default function App() {
   const [usuario, setUsuario] = useState(null);
+  const [carregandoAuth, setCarregandoAuth] = useState(true);
   const [emailLogin, setEmailLogin] = useState('');
   const [senhaLogin, setSenhaLogin] = useState('');
   const [erroAuth, setErroAuth] = useState('');
@@ -206,17 +207,18 @@ export default function App() {
     localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
+  // FORMULÁRIO COM PAGADOR E CATEGORIA EM BRANCO POR PADRÃO
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
-    categoria: CATEGORIAS_PADRAO[0],
-    pagador: '',
+    categoria: '', // Em branco para seleção manual obrigatória
+    pagador: '', // Em branco para seleção manual obrigatória
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
-    eFixoRecorrente: false, // Despesa fixa mensal sem fim
-    eParcelado: false,      // Se marcado, exige quantidade de parcelas
-    parcelas: 2,            // Quantidade padrão se parcelado
+    eFixoRecorrente: false,
+    eParcelado: false,
+    parcelas: 2,
     eAutofinanciamento: false,
     eReceita: false,
     mesCompetencia: '2026-11'
@@ -234,10 +236,15 @@ export default function App() {
     return [...categorias].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
   }, [categorias]);
 
+  // CORRIGIDO: Persistência de sessão mantendo o app sem refresh indesejado na tela de login
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) {
+      setCarregandoAuth(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUsuario(user);
+      setCarregandoAuth(false);
     });
     return () => unsubscribe();
   }, []);
@@ -296,17 +303,8 @@ export default function App() {
           categorias: novasCategorias,
           limitesOrcamento: novosLimites || limitesOrcamento
         }, { merge: true });
-        
-        setStatusAviso({
-          tipo: 'sucesso',
-          mensagem: 'Alterações salvas e sincronizadas com sucesso!'
-        });
-        setTimeout(() => setStatusAviso({ tipo: '', mensagem: '' }), 4000);
       } catch (err) {
-        setStatusAviso({
-          tipo: 'erro',
-          mensagem: 'Falha ao sincronizar com a nuvem.'
-        });
+        console.error("Falha ao sincronizar com a nuvem.", err);
       }
     }
   };
@@ -596,6 +594,10 @@ export default function App() {
       alert("Por favor, selecione quem pagou a despesa.");
       return;
     }
+    if (!form.categoria) {
+      alert("Por favor, selecione a categoria do gasto.");
+      return;
+    }
 
     const valorNumerico = arredondar2(parseFloat(parseMoedaInput(form.valor)));
     if (!form.descricao || isNaN(valorNumerico)) return;
@@ -614,8 +616,8 @@ export default function App() {
         categoria: form.categoria,
         pagador: form.pagador,
         tipoDivisao: form.tipoDivisao,
-        meioPagamento: form.meioPagamento,
-        mesCompetencia: form.mesCompetencia
+        meioPagamento: form.meioPagamento
+        // CORRIGIDO: mesCompetencia NÃO é sobrescrito globalmente, preservando cada mês original do grupo
       };
 
       if (atualizarProximos && editandoTransacao.grupoId) {
@@ -641,12 +643,15 @@ export default function App() {
       } else {
         if (db && usuario) {
           try {
-            await updateDoc(doc(db, "transacoes", editandoTransacao.id), dadosAtualizados);
+            await updateDoc(doc(db, "transacoes", editandoTransacao.id), {
+              ...dadosAtualizados,
+              mesCompetencia: form.mesCompetencia
+            });
           } catch (err) {
             console.error("Erro ao atualizar no Firestore", err);
           }
         }
-        setTransacoes(prev => prev.map(t => t.id === editandoTransacao.id ? { ...t, ...dadosAtualizados } : t));
+        setTransacoes(prev => prev.map(t => t.id === editandoTransacao.id ? { ...t, ...dadosAtualizados, mesCompetencia: form.mesCompetencia } : t));
       }
 
       setEditandoTransacao(null);
@@ -654,7 +659,6 @@ export default function App() {
       const isFixo = form.eFixoRecorrente;
       const isParcelado = form.eParcelado;
 
-      // Se for fixo, projeta para frente por 12 meses (padrão sem exigir número de parcelas). Se for parcelado, usa o número de parcelas informado.
       const numRepeticoes = isFixo ? 12 : (isParcelado ? Math.max(1, parseInt(form.parcelas) || 1) : 1);
 
       const valorPorMes = form.modoValor === 'fixo' || isFixo || !isParcelado
@@ -712,7 +716,7 @@ export default function App() {
       descricao: '',
       valor: '',
       modoValor: 'fixo',
-      categoria: categoriasOrdenadas[0] || '',
+      categoria: '',
       pagador: '',
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
@@ -733,7 +737,7 @@ export default function App() {
       descricao: descLimpa,
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       modoValor: 'fixo',
-      categoria: t.categoria,
+      categoria: t.categoria || '',
       pagador: t.pagador || '',
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
@@ -752,7 +756,7 @@ export default function App() {
       descricao: '',
       valor: '',
       modoValor: 'fixo',
-      categoria: categoriasOrdenadas[0] || '',
+      categoria: '',
       pagador: '',
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
@@ -855,6 +859,17 @@ export default function App() {
 
     recognition.start();
   };
+
+  if (carregandoAuth) {
+    return (
+      <div className={`min-h-screen ${modoEscuro ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'} flex items-center justify-center font-sans`}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-slate-400">Carregando Nosso Bolso...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!usuario) {
     return (
@@ -1551,11 +1566,13 @@ export default function App() {
                 </div>
                 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Categoria</label>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Categoria *</label>
                   <select
+                    required
                     value={form.categoria} onChange={(e) => setForm({...form, categoria: e.target.value})}
-                    className={`w-full px-3 py-2 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                    className={`w-full px-3 py-2 text-sm rounded-lg border font-semibold ${!form.categoria ? 'border-amber-500 text-amber-500' : ''} ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                   >
+                    <option value="" disabled>Selecione a categoria...</option>
                     {categoriasOrdenadas.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
@@ -1588,7 +1605,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* OPÇÕES DE RECORRÊNCIA OU PARCELAMENTO */}
                 <div className={`p-3 rounded-xl border ${modoEscuro ? 'bg-slate-700/30 border-slate-600' : 'bg-slate-50 border-slate-200'} space-y-3`}>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input 
