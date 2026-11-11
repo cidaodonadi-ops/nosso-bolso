@@ -125,20 +125,9 @@ export default function App() {
   const [modoEsqueciSenha, setModoEsqueciSenha] = useState(false);
 
   const [perfis, setPerfis] = useState({
-    pequeno: { nome: 'Pequeno', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00', emailVinculado: '' },
-    pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00', emailVinculado: '' }
+    pequeno: { nome: 'Pequeno', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' },
+    pequena: { nome: 'Pequena', salario: '6.000,00', va: '800,00', metaInvestimento: '800,00' }
   });
-
-  // IDENTIFICAÇÃO AUTOMÁTICA DO PERFIL COM BASE NO E-MAIL LOGADO
-  const perfilLogadoKey = useMemo(() => {
-    if (!usuario || !usuario.email) return 'pequeno';
-    const emailUser = usuario.email.toLowerCase();
-    if (perfis.pequena.emailVinculado && emailUser === perfis.pequena.emailVinculado.toLowerCase()) {
-      return 'pequena';
-    }
-    if (emailUser.includes('pequena') || emailUser.includes('wife')) return 'pequena';
-    return 'pequeno';
-  }, [usuario, perfis]);
 
   const [categorias, setCategorias] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_categorias');
@@ -217,30 +206,23 @@ export default function App() {
     localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
   };
 
-  // FORMULÁRIO COM PAGADOR PRÉ-PREENCHIDO PELO USUÁRIO LOGADO E DIA DE VENCIMENTO
+  // FORMULÁRIO COM PAGADOR EM BRANCO ("SELECIONE...") POR PADRÃO
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
     categoria: '', 
-    pagador: perfilLogadoKey, // Preenchido automaticamente pelo usuário logado
+    pagador: '', // Em branco para escolha manual obrigatória
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
     eFixoRecorrente: false,
     eParcelado: false,
     parcelas: 2,
-    diaVencimento: '10', // Dia padrão de vencimento
+    diaVencimento: '10', 
     eAutofinanciamento: false,
     eReceita: false,
     mesCompetencia: '2026-11'
   });
-
-  // Atualiza o pagador automaticamente se o usuário logado mudar
-  useEffect(() => {
-    if (!editandoTransacao && perfilLogadoKey) {
-      setForm(prev => ({ ...prev, pagador: perfilLogadoKey }));
-    }
-  }, [perfilLogadoKey, editandoTransacao]);
 
   const alternarTema = () => {
     setModoEscuro(prev => {
@@ -432,7 +414,7 @@ export default function App() {
     });
   }, [transacoesDoMes, filtroPessoa]);
 
-  // CONTROLE INTELIGENTE DE CONTAS PRÓXIMAS AO VENCIMENTO NO MÊS ATUAL
+  // CONTROLE DE VENCIMENTOS FILTRADO PELO USUÁRIO SELECIONADO NO DASHBOARD
   const contasProximasVencimento = useMemo(() => {
     const hoje = new Date();
     const diaAtual = hoje.getDate();
@@ -442,12 +424,18 @@ export default function App() {
 
     return transacoesDoMes.filter(t => {
       if (!t.diaVencimento) return false;
+      
+      // Se houver um filtro de pessoa ativo (Pequeno ou Pequena), filtra apenas as contas dele(a)
+      if (filtroPessoa !== 'todos' && t.pagador !== filtroPessoa && t.tipoDivisao !== '50/50') {
+        return false;
+      }
+
       const diaVenc = Number(t.diaVencimento);
       const diasRestantes = diaVenc - diaAtual;
-      // Alerta para contas que vencem hoje ou nos próximos 5 dias, e que ainda não passaram
+      // Alerta para contas que vencem hoje ou nos próximos 5 dias
       return diasRestantes >= 0 && diasRestantes <= 5;
     });
-  }, [transacoesDoMes, mesFiltro]);
+  }, [transacoesDoMes, mesFiltro, filtroPessoa]);
 
   const transacoesDoAno = useMemo(() => {
     return transacoes.filter(t => {
@@ -752,7 +740,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: perfilLogadoKey,
+      pagador: '', // Reseta para "Selecione..."
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
@@ -774,7 +762,7 @@ export default function App() {
       valor: formatarMoedaInput(String(Math.round(t.valor * 100))),
       modoValor: 'fixo',
       categoria: t.categoria || '',
-      pagador: t.pagador || perfilLogadoKey,
+      pagador: t.pagador || '',
       tipoDivisao: t.tipoDivisao || 'individual',
       meioPagamento: t.meioPagamento || 'salario',
       eFixoRecorrente: t.eFixoRecorrente || false,
@@ -794,7 +782,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: perfilLogadoKey,
+      pagador: '',
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
@@ -1122,12 +1110,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* ALERTA INTELIGENTE DE VENCIMENTOS PRÓXIMOS */}
+            {/* ALERTA INTELIGENTE DE VENCIMENTOS VINCULADO AO FILTRO DO USUÁRIO */}
             {contasProximasVencimento.length > 0 && modoVisualizacaoDashboard === 'mes' && (
               <div className="p-4 rounded-2xl border border-amber-500/50 bg-amber-500/10 shadow-md space-y-2">
                 <div className="flex items-center gap-2 text-amber-400 font-bold text-xs sm:text-sm">
                   <BellRing className="w-4 h-4 animate-bounce"/>
-                  <span>Contas Próximas ao Vencimento ({mesFiltro})</span>
+                  <span>
+                    Contas Próximas ao Vencimento {filtroPessoa !== 'todos' ? `(${filtroPessoa === 'pequeno' ? 'Pequeno' : 'Pequena'})` : '(Casal)'}
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   {contasProximasVencimento.map(c => {
@@ -1136,8 +1126,11 @@ export default function App() {
                     return (
                       <div key={c.id} className="p-2.5 rounded-xl border border-amber-500/30 bg-slate-800/40 flex justify-between items-center text-xs">
                         <div>
-                          <span className="font-bold block text-slate-200">{c.descricao}</span>
-                          <span className="text-[10px] text-amber-300">Vence dia {c.diaVencimento} ({diasRestantes === 0 ? 'Vence hoje!' : `Faltam ${diasRestantes} dia(s)`})</span>
+                          <div className="flex items-center gap-1">
+                            <span className={`text-[9px] px-1 rounded uppercase font-bold ${c.pagador === 'pequeno' ? 'bg-cyan-900 text-cyan-300' : 'bg-pink-900 text-pink-300'}`}>{c.pagador}</span>
+                            <span className="font-bold text-slate-200">{c.descricao}</span>
+                          </div>
+                          <span className="text-[10px] text-amber-300 block mt-0.5">Vence dia {c.diaVencimento} ({diasRestantes === 0 ? 'Vence hoje!' : `Faltam ${diasRestantes} dia(s)`})</span>
                         </div>
                         <span className="font-bold text-amber-400">R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
@@ -1455,16 +1448,6 @@ export default function App() {
                           onChange={(e) => {
                             const val = formatarMoedaInput(e.target.value);
                             setPerfis({ ...perfis, [perfilKey]: { ...p, metaInvestimento: val } });
-                          }}
-                          className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500 block">E-mail de Login Vinculado</label>
-                        <input 
-                          type="email" placeholder="email@exemplo.com" value={p.emailVinculado || ''}
-                          onChange={(e) => {
-                            setPerfis({ ...perfis, [perfilKey]: { ...p, emailVinculado: e.target.value } });
                           }}
                           className={`w-full px-3 py-1.5 text-sm rounded-lg border ${modoEscuro ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
                         />
