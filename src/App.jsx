@@ -194,7 +194,7 @@ export default function App() {
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
   const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
 
-  // ATALHOS INDIVIDUAIS POR USUÁRIO (FAVORITOS SEPARADOS)
+  // ATALHOS INDIVIDUAIS POR USUÁRIO (CACHE LOCAL + SINCRONIZAÇÃO FIRESTORE)
   const [atalhosPequeno, setAtalhosPequeno] = useState(() => {
     const salvo = localStorage.getItem('nossobolso_atalhos_pequeno');
     if (salvo) return JSON.parse(salvo);
@@ -210,7 +210,6 @@ export default function App() {
   const [novoAtalhosLabel, setNovoAtalhosLabel] = useState('');
   const [mostrandoAddAtalho, setMostrandoAddAtalho] = useState(false);
 
-  // Formulário com pagador padrão vinculado ao usuário logado
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
@@ -234,10 +233,26 @@ export default function App() {
     }
   }, [perfilLogadoKey]);
 
-  // Atalhos ativos exibidos com base em quem está selecionado no campo "Quem Pagou?" do formulário
   const atalhosAtuais = form.pagador === 'pequena' ? atalhosPequena : atalhosPequeno;
 
-  const adicionarAtalhoPessoal = (e) => {
+  // FUNÇÃO DEDICADA PARA PERSISTIR ATALHOS NO FIRESTORE
+  const sincronizarAtalhosNuvem = async (listaPequeno, listaPequena) => {
+    localStorage.setItem('nossobolso_atalhos_pequeno', JSON.stringify(listaPequeno));
+    localStorage.setItem('nossobolso_atalhos_pequena', JSON.stringify(listaPequena));
+
+    if (db && usuario) {
+      try {
+        await setDoc(doc(db, "configuracoes", "geral"), {
+          atalhosPequeno: listaPequeno,
+          atalhosPequena: listaPequena
+        }, { merge: true });
+      } catch (err) {
+        console.error("Erro ao sincronizar atalhos no Firestore:", err);
+      }
+    }
+  };
+
+  const adicionarAtalhoPessoal = async (e) => {
     e.preventDefault();
     if (!novoAtalhosLabel.trim()) return;
 
@@ -250,26 +265,26 @@ export default function App() {
     if (form.pagador === 'pequena') {
       const atualizados = [...atalhosPequena, novoAtalho];
       setAtalhosPequena(atualizados);
-      localStorage.setItem('nossobolso_atalhos_pequena', JSON.stringify(atualizados));
+      await sincronizarAtalhosNuvem(atalhosPequeno, atualizados);
     } else {
       const atualizados = [...atalhosPequeno, novoAtalho];
       setAtalhosPequeno(atualizados);
-      localStorage.setItem('nossobolso_atalhos_pequeno', JSON.stringify(atualizados));
+      await sincronizarAtalhosNuvem(atualizados, atalhosPequena);
     }
 
     setNovoAtalhosLabel('');
     setMostrandoAddAtalho(false);
   };
 
-  const removerAtalhoPessoal = (indexRemover) => {
+  const removerAtalhoPessoal = async (indexRemover) => {
     if (form.pagador === 'pequena') {
       const atualizados = atalhosPequena.filter((_, idx) => idx !== indexRemover);
       setAtalhosPequena(atualizados);
-      localStorage.setItem('nossobolso_atalhos_pequena', JSON.stringify(atualizados));
+      await sincronizarAtalhosNuvem(atalhosPequeno, atualizados);
     } else {
       const atualizados = atalhosPequeno.filter((_, idx) => idx !== indexRemover);
       setAtalhosPequeno(atualizados);
-      localStorage.setItem('nossobolso_atalhos_pequeno', JSON.stringify(atualizados));
+      await sincronizarAtalhosNuvem(atualizados, atalhosPequena);
     }
   };
 
@@ -330,6 +345,15 @@ export default function App() {
             setCategorias(catNuvem);
             localStorage.setItem('nossobolso_categorias', JSON.stringify(catNuvem));
           }
+          // CARREGA OS ATALHOS SINCRONIZADOS DA NUVEM
+          if (dados.atalhosPequeno && Array.isArray(dados.atalhosPequeno)) {
+            setAtalhosPequeno(dados.atalhosPequeno);
+            localStorage.setItem('nossobolso_atalhos_pequeno', JSON.stringify(dados.atalhosPequeno));
+          }
+          if (dados.atalhosPequena && Array.isArray(dados.atalhosPequena)) {
+            setAtalhosPequena(dados.atalhosPequena);
+            localStorage.setItem('nossobolso_atalhos_pequena', JSON.stringify(dados.atalhosPequena));
+          }
         }
       } catch (e) {
         console.error("Erro ao carregar do Firestore", e);
@@ -349,7 +373,9 @@ export default function App() {
         await setDoc(doc(db, "configuracoes", "geral"), {
           perfis: novosPerfis,
           categorias: novasCategorias,
-          limitesOrcamento: novosLimites || limitesOrcamento
+          limitesOrcamento: novosLimites || limitesOrcamento,
+          atalhosPequeno,
+          atalhosPequena
         }, { merge: true });
       } catch (err) {
         console.error("Falha ao sincronizar com a nuvem.", err);
