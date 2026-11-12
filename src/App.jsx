@@ -188,52 +188,35 @@ export default function App() {
   const [mesFiltro, setMesFiltro] = useState('2026-11');
   const [anoFiltro, setAnoFiltro] = useState('2026');
   const [filtroCategoriaLancamentos, setFiltroCategoriaLancamentos] = useState('todas');
-  
-  // NOVO ESTADO: Filtro de pessoa exclusivo para a aba de Lançamentos (inicia com o logado)
   const [filtroPessoaLancamentos, setFiltroPessoaLancamentos] = useState('meus');
 
   const [ouvindoVoz, setOuvindoVoz] = useState(false);
   const [novaSenhaConfig, setNovaSenhaConfig] = useState('');
   const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
 
-  const [atalhosGerais, setAtalhosGerais] = useState(() => {
-    const salvo = localStorage.getItem('nossobolso_atalhos_gerais');
+  // ATALHOS INDIVIDUAIS POR USUÁRIO (FAVORITOS SEPARADOS)
+  const [atalhosPequeno, setAtalhosPequeno] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_atalhos_pequeno');
     if (salvo) return JSON.parse(salvo);
     return [...ATALHOS_INICIAIS_PADRAO];
   });
+
+  const [atalhosPequena, setAtalhosPequena] = useState(() => {
+    const salvo = localStorage.getItem('nossobolso_atalhos_pequena');
+    if (salvo) return JSON.parse(salvo);
+    return [...ATALHOS_INICIAIS_PADRAO];
+  });
+
   const [novoAtalhosLabel, setNovoAtalhosLabel] = useState('');
   const [mostrandoAddAtalho, setMostrandoAddAtalho] = useState(false);
 
-  const adicionarAtalhoPessoal = (e) => {
-    e.preventDefault();
-    if (!novoAtalhosLabel.trim()) return;
-
-    const novoAtalho = {
-      label: novoAtalhosLabel.trim(),
-      descricao: novoAtalhosLabel.trim().replace(/^[^\w\s]+/, '').trim() || 'Gasto',
-      categoria: form.categoria
-    };
-
-    const atualizados = [...atalhosGerais, novoAtalho];
-    setAtalhosGerais(atualizados);
-    localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
-    setNovoAtalhosLabel('');
-    setMostrandoAddAtalho(false);
-  };
-
-  const removerAtalhoPessoal = (indexRemover) => {
-    const atualizados = atalhosGerais.filter((_, idx) => idx !== indexRemover);
-    setAtalhosGerais(atualizados);
-    localStorage.setItem('nossobolso_atalhos_gerais', JSON.stringify(atualizados));
-  };
-
-  // FORMULÁRIO COM O "QUEM PAGOU?" PRÉ-PREENCHIDO COM O USUÁRIO LOGADO
+  // Formulário com pagador padrão vinculado ao usuário logado
   const [form, setForm] = useState({
     descricao: '',
     valor: '',
     modoValor: 'fixo',
     categoria: '', 
-    pagador: perfilLogadoKey, // PRÉ-PREENCHIDO AUTOMATICAMENTE
+    pagador: perfilLogadoKey, 
     tipoDivisao: 'individual',
     meioPagamento: 'salario',
     eFixoRecorrente: false,
@@ -245,12 +228,50 @@ export default function App() {
     mesCompetencia: '2026-11'
   });
 
-  // Atualiza o formulário padrão caso o perfil logado seja reconhecido após montagem
   useEffect(() => {
     if (!editandoTransacao) {
       setForm(prev => ({ ...prev, pagador: perfilLogadoKey }));
     }
   }, [perfilLogadoKey]);
+
+  // Atalhos ativos exibidos com base em quem está selecionado no campo "Quem Pagou?" do formulário
+  const atalhosAtuais = form.pagador === 'pequena' ? atalhosPequena : atalhosPequeno;
+
+  const adicionarAtalhoPessoal = (e) => {
+    e.preventDefault();
+    if (!novoAtalhosLabel.trim()) return;
+
+    const novoAtalho = {
+      label: novoAtalhosLabel.trim(),
+      descricao: novoAtalhosLabel.trim().replace(/^[^\w\s]+/, '').trim() || 'Gasto',
+      categoria: form.categoria
+    };
+
+    if (form.pagador === 'pequena') {
+      const atualizados = [...atalhosPequena, novoAtalho];
+      setAtalhosPequena(atualizados);
+      localStorage.setItem('nossobolso_atalhos_pequena', JSON.stringify(atualizados));
+    } else {
+      const atualizados = [...atalhosPequeno, novoAtalho];
+      setAtalhosPequeno(atualizados);
+      localStorage.setItem('nossobolso_atalhos_pequeno', JSON.stringify(atualizados));
+    }
+
+    setNovoAtalhosLabel('');
+    setMostrandoAddAtalho(false);
+  };
+
+  const removerAtalhoPessoal = (indexRemover) => {
+    if (form.pagador === 'pequena') {
+      const atualizados = atalhosPequena.filter((_, idx) => idx !== indexRemover);
+      setAtalhosPequena(atualizados);
+      localStorage.setItem('nossobolso_atalhos_pequena', JSON.stringify(atualizados));
+    } else {
+      const atualizados = atalhosPequeno.filter((_, idx) => idx !== indexRemover);
+      setAtalhosPequeno(atualizados);
+      localStorage.setItem('nossobolso_atalhos_pequeno', JSON.stringify(atualizados));
+    }
+  };
 
   const alternarTema = () => {
     setModoEscuro(prev => {
@@ -435,7 +456,6 @@ export default function App() {
     });
   }, [transacoes, mesFiltro, filtroCategoriaLancamentos]);
 
-  // FILTRAGEM DOS LANÇAMENTOS RESPEITANDO O USUÁRIO LOGADO OU O SELECIONADO NA ABA
   const transacoesDoMesFiltradasPorPessoa = useMemo(() => {
     return transacoesDoMes.filter(t => {
       if (filtroPessoaLancamentos === 'meus') {
@@ -444,7 +464,6 @@ export default function App() {
         const outroPerfil = perfilLogadoKey === 'pequeno' ? 'pequena' : 'pequeno';
         if (t.pagador !== outroPerfil) return false;
       }
-      // Se for 'todos', traz tudo do mês
       return true;
     });
   }, [transacoesDoMes, filtroPessoaLancamentos, perfilLogadoKey]);
@@ -785,7 +804,7 @@ export default function App() {
       valor: '',
       modoValor: 'fixo',
       categoria: '',
-      pagador: perfilLogadoKey, // Mantém o usuário logado como padrão para o próximo
+      pagador: perfilLogadoKey,
       tipoDivisao: 'individual',
       meioPagamento: 'salario',
       eFixoRecorrente: false,
@@ -1434,7 +1453,6 @@ export default function App() {
           </div>
         )}
 
-        {/* NOVA ABA: RELATÓRIOS VISUAIS */}
         {abaAtiva === 'relatorios' && (
           <div className="space-y-4">
             <div className={`p-5 sm:p-6 rounded-2xl border ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md space-y-5`}>
@@ -1713,7 +1731,7 @@ export default function App() {
                 <div className="space-y-2 pb-3 border-b border-slate-200 dark:border-slate-700">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-amber-400"/> Atalhos Rápidos
+                      <Zap className="w-3 h-3 text-amber-400"/> Atalhos Rápidos ({form.pagador === 'pequena' ? 'Pequena' : 'Pequeno'})
                     </span>
                     <button 
                       type="button" 
@@ -1738,7 +1756,7 @@ export default function App() {
                   )}
 
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {atalhosGerais.map((atalho, index) => (
+                    {atalhosAtuais.map((atalho, index) => (
                       <div key={index} className="group relative flex items-center">
                         <button
                           type="button"
@@ -1909,7 +1927,6 @@ export default function App() {
             </div>
 
             <div className="md:col-span-2 space-y-4">
-              {/* FILTROS DA ABA DE LANÇAMENTOS (PESSOA E CATEGORIA) */}
               <div className={`p-3 rounded-xl border flex flex-col gap-2.5 ${modoEscuro ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
