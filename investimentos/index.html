@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nosso Bolso • Investimentos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Ocultar barra de rolagem mantendo funcionalidade */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .blur-value {
+            filter: blur(6px);
+            user-select: none;
+            transition: filter 0.2s ease;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased pb-24 md:pb-8">
+
+    <div class="flex min-h-screen">
+        <!-- SIDEBAR DESKTOP -->
+        <aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-slate-200 z-30">
+            <div class="flex items-center gap-3 px-6 h-16 border-b border-slate-100">
+                <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white font-bold shadow-sm">
+                    NB
+                </div>
+                <div>
+                    <span class="font-bold text-slate-900 tracking-tight block leading-none">Nosso Bolso</span>
+                    <span class="text-[11px] font-medium text-brand-600 uppercase tracking-wider">Investimentos</span>
+                </div>
+            </div>
+
+            <nav class="flex-1 px-4 py-6 space-y-1.5">
+                <a href="#" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-brand-50 text-brand-700 font-semibold text-sm">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                    Dashboard
+                </a>
+                <a href="#ativos" onclick="alert('Navegação para Tela 2: Extrato e Custódia')" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 font-medium text-sm transition">
+                    <i data-lucide="wallet" class="w-5 h-5"></i>
+                    Meus Ativos
+                </a>
+                <a href="#importar" onclick="openImportModal()" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 font-medium text-sm transition">
+                    <i data-lucide="file-up" class="w-5 h-5"></i>
+                    Importar Notas / PDF
+                </a>
+                <a href="#ir" onclick="alert('Navegação para Tela 4: Apuração de IR e Simulador')" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 font-medium text-sm transition">
+                    <i data-lucide="calculator" class="w-5 h-5"></i>
+                    Apuração de IR
+                </a>
+            </nav>
+
+            <!-- Voltar para Finanças -->
+            <div class="p-4 border-t border-slate-100">
+                <a href="../index.html" class="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold transition">
+                    <span class="flex items-center gap-2">
+                        <i data-lucide="arrow-left-right" class="w-4 h-4 text-slate-500"></i>
+                        Módulo Finanças
+                    </span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </a>
+            </div>
+        </aside>
+
+        <!-- CONTEÚDO PRINCIPAL -->
+        <main class="flex-1 md:pl-64 w-full max-w-6xl mx-auto">
+            
+            <!-- STICKY HEADER (MOBILE & DESKTOP) -->
+            <header class="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 md:px-8">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <!-- Título & Status Cotação -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="md:hidden w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-sm">
+                                NB
+                            </div>
+                            <div>
+                                <h1 class="text-base md:text-lg font-bold text-slate-900 leading-tight">Carteira de Investimentos</h1>
+                                <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span id="last-update-text">Cotações atualizadas às 15:30</span>
+                                    <button onclick="simulateQuoteRefresh()" class="text-brand-600 hover:text-brand-700 ml-1 p-0.5" title="Atualizar agora">
+                                        <i data-lucide="refresh-cw" id="refresh-icon" class="w-3 h-3"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botão Importar Desktop -->
+                        <button onclick="openImportModal()" class="hidden md:inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl shadow-sm transition">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            Importar Nota / Planilha
+                        </button>
+                    </div>
+
+                    <!-- SELETOR DE ESCOPO: PEQUENO | PEQUENA | CONJUNTO -->
+                    <div class="bg-slate-100 p-1 rounded-xl flex items-center justify-between sm:w-80 border border-slate-200/60">
+                        <button onclick="setScope('pequeno')" id="btn-scope-pequeno" class="scope-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5">
+                            <span>👨</span> Pequeno
+                        </button>
+                        <button onclick="setScope('pequena')" id="btn-scope-pequena" class="scope-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5">
+                            <span>👩</span> Pequena
+                        </button>
+                        <button onclick="setScope('conjunto')" id="btn-scope-conjunto" class="scope-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 bg-white text-brand-700 shadow-sm">
+                            <span>💑</span> Conjunto
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CORPO DO DASHBOARD -->
+            <div class="p-4 md:p-8 space-y-5">
+
+                <!-- 1. CARD HERO: PATRIMÔNIO LÍQUIDO & BENCHMARKS -->
+                <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-brand-950 rounded-2xl p-5 md:p-6 text-white shadow-lg relative overflow-hidden">
+                    <!-- Detalhe visual de fundo -->
+                    <div class="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-brand-500/10 blur-2xl pointer-events-none"></div>
+
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span id="scope-label" class="text-xs font-medium text-slate-300 uppercase tracking-wider">Patrimônio Conjunto</span>
+                                <button onclick="togglePrivacy()" class="text-slate-400 hover:text-white transition p-1" title="Ocultar/Mostrar valores">
+                                    <i data-lucide="eye" id="privacy-icon" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <div class="mt-1 flex items-baseline gap-2">
+                                <h2 id="total-patrimony" class="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight sensitive-data">
+                                    R$ 184.650,80
+                                </h2>
+                            </div>
+                        </div>
+
+                        <!-- Badge Variação Hoje -->
+                        <div id="daily-badge" class="bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1">
+                            <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                            <span id="daily-return" class="sensitive-data">+R$ 542,10 (+0,29%)</span>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Proporção do Casal (Visível apenas no modo Conjunto) -->
+                    <div id="couple-split-bar" class="mt-4 pt-3 border-t border-white/10">
+                        <div class="flex justify-between text-[11px] text-slate-300 mb-1.5">
+                            <span>👨 Pequeno: <strong class="text-white sensitive-data" id="split-pequeno-val">R$ 107.097,46 (58%)</strong></span>
+                            <span>👩 Pequena: <strong class="text-white sensitive-data" id="split-pequena-val">R$ 77.553,34 (42%)</strong></span>
+                        </div>
+                        <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden flex">
+                            <div id="split-pequeno-bar" class="bg-brand-400 h-full transition-all duration-500" style="width: 58%"></div>
+                            <div id="split-pequena-bar" class="bg-pink-400 h-full transition-all duration-500" style="width: 42%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Grid Inferior: Lucro Acumulado & Benchmarks -->
+                    <div class="mt-5 pt-4 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">Ganho Acumulado</span>
+                            <span id="total-gain" class="text-sm font-bold text-emerald-400 sensitive-data">+R$ 31.420,80 (+20,5%)</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">Rentab. 12m</span>
+                            <span id="return-12m" class="text-sm font-bold text-white">14,35%</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">vs. CDI (11,65%)</span>
+                            <span id="vs-cdi" class="text-xs font-semibold bg-white/10 text-emerald-300 px-2 py-0.5 rounded inline-block mt-0.5">123% do CDI</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">vs. IPCA+ (9,80%)</span>
+                            <span id="vs-ipca" class="text-xs font-semibold bg-white/10 text-brand-200 px-2 py-0.5 rounded inline-block mt-0.5">+4,55% real</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- GRID PRINCIPAL (2 COLUNAS NO DESKTOP) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    
+                    <!-- 2. ALOCAÇÃO POR CLASSE (DONUT CHART) -->
+                    <section class="lg:col-span-5 bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">Alocação da Carteira</h3>
+                                <p class="text-xs text-slate-500">Distribuição atual vs. meta definida</p>
+                            </div>
+                            <span class="text-[11px] font-semibold text-brand-600 bg-brand-50 px-2.5 py-1 rounded-lg">5 Classes</span>
+                        </div>
+
+                        <div class="relative h-52 w-full flex items-center justify-center my-1">
+                            <canvas id="allocationChart"></canvas>
+                            <!-- Centro da Rosca -->
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span class="text-[11px] text-slate-400 font-medium">Maior fatia</span>
+                                <span id="top-asset-class" class="text-sm font-bold text-slate-800">Renda Fixa</span>
+                                <span id="top-asset-pct" class="text-xs font-semibold text-brand-600">45%</span>
+                            </div>
+                        </div>
+
+                        <!-- Legenda Detalhada -->
+                        <div id="allocation-legend" class="mt-4 space-y-2 border-t border-slate-100 pt-3">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+
+                    <!-- 3. PROJEÇÃO DE LONGO PRAZO (SELIC / CDI / IPCA+) -->
+                    <section class="lg:col-span-7 bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">Projeção Patrimonial (1, 3 e 5 anos)</h3>
+                                <p class="text-xs text-slate-500">Base: Selic 11,75% • IPCA proj. 4,20% a.a.</p>
+                            </div>
+                            
+                            <!-- Toggle Aporte Mensal -->
+                            <div class="inline-flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/60 self-start">
+                                <button onclick="setProjectionMode('sem_aporte')" id="proj-sem" class="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-white text-slate-800 shadow-sm transition">
+                                    Sem aportes
+                                </button>
+                                <button onclick="setProjectionMode('com_aporte')" id="proj-com" class="px-2.5 py-1 text-[11px] font-semibold rounded-md text-slate-500 hover:text-slate-700 transition">
+                                    + Aporte mensal
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="relative h-56 w-full">
+                            <canvas id="projectionChart"></canvas>
+                        </div>
+
+                        <!-- Cards de Marcos Futuros -->
+                        <div class="grid grid-cols-3 gap-2.5 mt-4 pt-3 border-t border-slate-100">
+                            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-[11px] text-slate-500 block">Em 1 Ano</span>
+                                <span id="proj-1y" class="text-xs sm:text-sm font-bold text-slate-900 sensitive-data">R$ 207.178</span>
+                            </div>
+                            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-[11px] text-slate-500 block">Em 3 Anos</span>
+                                <span id="proj-3y" class="text-xs sm:text-sm font-bold text-slate-900 sensitive-data">R$ 260.815</span>
+                            </div>
+                            <div class="bg-brand-50/70 p-2.5 rounded-xl border border-brand-100">
+                                <span class="text-[11px] text-brand-700 font-medium block">Em 5 Anos</span>
+                                <span id="proj-5y" class="text-xs sm:text-sm font-extrabold text-brand-700 sensitive-data">R$ 328.340</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- 4. RESUMO DE PROVENTOS & INDICADORES MACRO -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- Proventos do Mês -->
+                    <section class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                    <i data-lucide="coins" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-900">Proventos no Mês</h3>
+                                    <p class="text-[11px] text-slate-500">Dividendos, JCP e Rendimentos FIIs</p>
+                                </div>
+                            </div>
+                            <span id="dividends-total" class="text-base font-extrabold text-emerald-600 sensitive-data">R$ 984,50</span>
+                        </div>
+                        <div class="space-y-2 mt-3 text-xs">
+                            <div class="flex justify-between py-1.5 border-b border-slate-100">
+                                <span class="text-slate-600">✅ Já pagos na conta</span>
+                                <span id="dividends-paid" class="font-semibold text-slate-800 sensitive-data">R$ 642,00</span>
+                            </div>
+                            <div class="flex justify-between py-1.5">
+                                <span class="text-slate-600">⏳ Provisionados (a receber)</span>
+                                <span id="dividends-prov" class="font-semibold text-slate-800 sensitive-data">R$ 342,50</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Painel de Indicadores & Status IR -->
+                    <section class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                                    <i data-lucide="shield-check" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-900">Termômetro Fiscal (IR Mês)</h3>
+                                    <p class="text-[11px] text-slate-500">Limite isenção Ações: R$ 20.000/CPF</p>
+                                </div>
+                            </div>
+                            <span class="text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full">Isento</span>
+                        </div>
+                        <div class="mt-2">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-500">Vendas de Ações no mês</span>
+                                <span id="ir-sales" class="font-semibold text-slate-800 sensitive-data">R$ 4.200,00 / R$ 20.000</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="ir-bar" class="bg-emerald-500 h-full rounded-full" style="width: 21%"></div>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-2">
+                                * O controle de isenção de R$ 20k é calculado separadamente por titular (Pequeno e Pequena).
+                            </p>
+                        </div>
+                    </section>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- BOTÃO FLUTUANTE (FAB) MOBILE PARA IMPORTAR / LANÇAR -->
+    <button onclick="openImportModal()" class="md:hidden fixed right-4 bottom-20 z-30 w-13 h-13 p-3.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-600/30 flex items-center justify-center transition active:scale-95" aria-label="Importar Nota ou Planilha">
+        <i data-lucide="plus" class="w-6 h-6"></i>
+    </button>
+
+    <!-- BOTTOM NAVIGATION BAR (MOBILE) -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 flex items-center justify-around h-16 px-2">
+        <a href="#" class="flex flex-col items-center justify-center text-brand-600 font-semibold text-[11px] gap-1 w-full">
+            <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+            <span>Início</span>
+        </a>
+        <a href="#ativos" onclick="alert('Navegação para Tela 2: Meus Ativos')" class="flex flex-col items-center justify-center text-slate-500 hover:text-slate-800 font-medium text-[11px] gap-1 w-full">
+            <i data-lucide="wallet" class="w-5 h-5"></i>
+            <span>Ativos</span>
+        </a>
+        <a href="#importar" onclick="openImportModal()" class="flex flex-col items-center justify-center text-slate-500 hover:text-slate-800 font-medium text-[11px] gap-1 w-full">
+            <i data-lucide="file-up" class="w-5 h-5"></i>
+            <span>Importar</span>
+        </a>
+        <a href="#ir" onclick="alert('Navegação para Tela 4: Apuração IR')" class="flex flex-col items-center justify-center text-slate-500 hover:text-slate-800 font-medium text-[11px] gap-1 w-full">
+            <i data-lucide="calculator" class="w-5 h-5"></i>
+            <span>IR / Simular</span>
+        </a>
+    </nav>
+
+    <!-- MODAL DE IMPORTAÇÃO DE NOTA PDF / PLANILHA -->
+    <div id="import-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-fade-in">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-bold text-slate-900">Importar Movimentações</h3>
+                <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="mt-4 space-y-4">
+                <div>
+                    <label class="text-xs font-semibold text-slate-700 block mb-1.5">Titular da Conta / Nota</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center gap-2 p-2.5 border border-brand-500 bg-brand-50/50 rounded-xl cursor-pointer text-xs font-semibold text-brand-700">
+                            <input type="radio" name="titular_import" value="pequeno" checked class="accent-brand-600">
+                            👨 Pequeno
+                        </label>
+                        <label class="flex items-center gap-2 p-2.5 border border-slate-200 rounded-xl cursor-pointer text-xs font-semibold text-slate-700">
+                            <input type="radio" name="titular_import" value="pequena" class="accent-brand-600">
+                            👩 Pequena
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Área Dropzone -->
+                <div onclick="simulatePdfParse()" class="border-2 border-dashed border-slate-300 hover:border-brand-500 bg-slate-50 hover:bg-brand-50/30 rounded-2xl p-6 text-center cursor-pointer transition">
+                    <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mx-auto mb-2">
+                        <i data-lucide="file-text" class="w-5 h-5"></i>
+                    </div>
+                    <p class="text-xs font-bold text-slate-800">Toque para selecionar Nota em PDF ou Excel</p>
+                    <p class="text-[11px] text-slate-500 mt-1">Suporta padrão SINACOR (XP, Clear, Rico, BTG, NuInvest) e planilhas B3 (.xlsx)</p>
+                </div>
+
+                <!-- Resultado Simulado do Parser -->
+                <div id="pdf-preview-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs">
+                    <div class="flex items-center gap-2 font-bold text-emerald-800 mb-1">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+                        Nota #849201 lida com sucesso!
+                    </div>
+                    <ul class="text-emerald-700 space-y-1 text-[11px] pl-6 list-disc">
+                        <li>Compra <strong>50x ITUB4</strong> a R$ 34,20</li>
+                        <li>Compra <strong>15x HGLG11</strong> a R$ 158,90</li>
+                        <li>Taxas B3 rateadas automaticamente (R$ 1,24)</li>
+                    </ul>
+                    <button onclick="closeImportModal(); alert('Transações gravadas na carteira com sucesso!');" class="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg text-xs transition">
+                        Confirmar e Atualizar Carteira
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS DE DADOS E GRÁFICOS -->
+    <script>
+        // Inicializar ícones Lucide
+        lucide.createIcons();
+
+        // Banco de Dados Simulado (Pequeno, Pequena e Conjunto)
+        const portfolioData = {
+            pequeno: {
+                label: "Patrimônio • Pequeno",
+                total: "R$ 107.097,46",
+                numericTotal: 107097.46,
+                daily: "+R$ 318,40 (+0,30%)",
+                gain: "+R$ 19.240,10 (+21,9%)",
+                return12m: "14,80%",
+                vsCdi: "127% do CDI",
+                vsIpca: "+5,00% real",
+                monthlyContribution: 1800,
+                allocation: [
+                    { label: "Renda Fixa (Selic/IPCA+)", pct: 40, val: "R$ 42.838,98", meta: "40%", color: "#4f46e5" },
+                    { label: "Ações Brasil", pct: 32, val: "R$ 34.271,19", meta: "30%", color: "#10b981" },
+                    { label: "Fundos Imobiliários", pct: 20, val: "R$ 21.419,49", meta: "20%", color: "#f59e0b" },
+                    { label: "Exterior (ETFs)", pct: 8, val: "R$ 8.567,80", meta: "10%", color: "#06b6d4" }
+                ],
+                dividends: { total: "R$ 582,30", paid: "R$ 390,00", prov: "R$ 192,30" },
+                irSales: "R$ 4.200,00 / R$ 20.000",
+                irPct: 21
+            },
+            pequena: {
+                label: "Patrimônio • Pequena",
+                total: "R$ 77.553,34",
+                numericTotal: 77553.34,
+                daily: "+R$ 223,70 (+0,29%)",
+                gain: "+R$ 12.180,70 (+18,6%)",
+                return12m: "13,75%",
+                vsCdi: "118% do CDI",
+                vsIpca: "+3,95% real",
+                monthlyContribution: 1400,
+                allocation: [
+                    { label: "Renda Fixa (Selic/IPCA+)", pct: 52, val: "R$ 40.327,74", meta: "50%", color: "#4f46e5" },
+                    { label: "Fundos Imobiliários", pct: 28, val: "R$ 21.714,94", meta: "30%", color: "#f59e0b" },
+                    { label: "Ações Brasil", pct: 15, val: "R$ 11.633,00", meta: "15%", color: "#10b981" },
+                    { label: "Exterior (ETFs)", pct: 5, val: "R$ 3.877,66", meta: "5%", color: "#06b6d4" }
+                ],
+                dividends: { total: "R$ 402,20", paid: "R$ 252,00", prov: "R$ 150,20" },
+                irSales: "R$ 0,00 / R$ 20.000",
+                irPct: 0
+            },
+            conjunto: {
+                label: "Patrimônio Conjunto",
+                total: "R$ 184.650,80",
+                numericTotal: 184650.80,
+                daily: "+R$ 542,10 (+0,29%)",
+                gain: "+R$ 31.420,80 (+20,5%)",
+                return12m: "14,35%",
+                vsCdi: "123% do CDI",
+                vsIpca: "+4,55% real",
+                monthlyContribution: 3200,
+                allocation: [
+                    { label: "Renda Fixa (Selic/IPCA+)", pct: 45, val: "R$ 83.166,72", meta: "45%", color: "#4f46e5" },
+                    { label: "Ações Brasil", pct: 25, val: "R$ 45.904,19", meta: "25%", color: "#10b981" },
+                    { label: "Fundos Imobiliários", pct: 23, val: "R$ 43.134,43", meta: "20%", color: "#f59e0b" },
+                    { label: "Exterior (ETFs)", pct: 7, val: "R$ 12.445,46", meta: "10%", color: "#06b6d4" }
+                ],
+                dividends: { total: "R$ 984,50", paid: "R$ 642,00", prov: "R$ 342,50" },
+                irSales: "R$ 4.200,00 / R$ 20.000",
+                irPct: 21
+            }
+        };
+
+        let currentScope = 'conjunto';
+        let projectionMode = 'sem_aporte';
+        let isPrivacyOn = false;
+        let allocationChartInstance = null;
+        let projectionChartInstance = null;
+
+        // Formatar Moeda BRL
+        function formatBRL(val) {
+            return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+        }
+
+        // Alternar Escopo (Pequeno, Pequena, Conjunto)
+        function setScope(scope) {
+            currentScope = scope;
+            const data = portfolioData[scope];
+
+            // Atualizar botões do Segmented Control
+            document.querySelectorAll('.scope-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-brand-700', 'shadow-sm');
+                btn.classList.add('text-slate-600');
+            });
+            const activeBtn = document.getElementById(`btn-scope-${scope}`);
+            activeBtn.classList.add('bg-white', 'text-brand-700', 'shadow-sm');
+            activeBtn.classList.remove('text-slate-600');
+
+            // Atualizar Textos Hero
+            document.getElementById('scope-label').innerText = data.label;
+            document.getElementById('total-patrimony').innerText = data.total;
+            document.getElementById('daily-return').innerText = data.daily;
+            document.getElementById('total-gain').innerText = data.gain;
+            document.getElementById('return-12m').innerText = data.return12m;
+            document.getElementById('vs-cdi').innerText = data.vsCdi;
+            document.getElementById('vs-ipca').innerText = data.vsIpca;
+
+            // Mostrar/Ocultar barra de divisão do casal
+            const splitBar = document.getElementById('couple-split-bar');
+            if (scope === 'conjunto') {
+                splitBar.classList.remove('hidden');
+            } else {
+                splitBar.classList.add('hidden');
+            }
+
+            // Atualizar Proventos e IR
+            document.getElementById('dividends-total').innerText = data.dividends.total;
+            document.getElementById('dividends-paid').innerText = data.dividends.paid;
+            document.getElementById('dividends-prov').innerText = data.dividends.prov;
+            document.getElementById('ir-sales').innerText = data.irSales;
+            document.getElementById('ir-bar').style.width = `${data.irPct}%`;
+
+            // Atualizar Gráficos
+            renderAllocationChart(data.allocation);
+            renderProjectionChart();
+        }
+
+        // Renderizar Gráfico de Alocação
+        function renderAllocationChart(allocation) {
+            const ctx = document.getElementById('allocationChart').getContext('2d');
+            
+            // Atualizar texto central
+            document.getElementById('top-asset-class').innerText = allocation[0].label.split(' ')[0] + ' ' + (allocation[0].label.split(' ')[1] || '');
+            document.getElementById('top-asset-pct').innerText = allocation[0].pct + '%';
+
+            // Atualizar Legenda HTML
+            const legendContainer = document.getElementById('allocation-legend');
+            legendContainer.innerHTML = allocation.map(item => `
+                <div class="flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${item.color}"></span>
+                        <span class="font-medium text-slate-700">${item.label}</span>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-slate-500 sensitive-data ${isPrivacyOn ? 'blur-value' : ''}">${item.val}</span>
+                        <span class="font-bold text-slate-800 w-9 text-right">${item.pct}%</span>
+                    </div>
+                </div>
+            `).join('');
+
+            if (allocationChartInstance) {
+                allocationChartInstance.destroy();
+            }
+
+            allocationChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: allocation.map(a => a.label),
+                    datasets: [{
+                        data: allocation.map(a => a.pct),
+                        backgroundColor: allocation.map(a => a.color),
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '72%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.label}: ${context.parsed}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Alternar Modo de Projeção
+        function setProjectionMode(mode) {
+            projectionMode = mode;
+            const btnSem = document.getElementById('proj-sem');
+            const btnCom = document.getElementById('proj-com');
+
+            if (mode === 'sem_aporte') {
+                btnSem.className = "px-2.5 py-1 text-[11px] font-semibold rounded-md bg-white text-slate-800 shadow-sm transition";
+                btnCom.className = "px-2.5 py-1 text-[11px] font-semibold rounded-md text-slate-500 hover:text-slate-700 transition";
+            } else {
+                btnCom.className = "px-2.5 py-1 text-[11px] font-semibold rounded-md bg-white text-brand-700 shadow-sm transition";
+                btnSem.className = "px-2.5 py-1 text-[11px] font-semibold rounded-md text-slate-500 hover:text-slate-700 transition";
+            }
+            renderProjectionChart();
+        }
+
+        // Calcular e Renderizar Gráfico de Projeção (Selic 11.75% a.a.)
+        function renderProjectionChart() {
+            const data = portfolioData[currentScope];
+            const initial = data.numericTotal;
+            const monthlyRate = Math.pow(1 + 0.1175, 1/12) - 1; // Taxa mensal equivalente a 11,75% a.a.
+            const pmt = projectionMode === 'com_aporte' ? data.monthlyContribution : 0;
+
+            const labels = ['Hoje', '1 Ano', '2 Anos', '3 Anos', '4 Anos', '5 Anos'];
+            const values = [];
+
+            for (let year = 0; year <= 5; year++) {
+                const months = year * 12;
+                if (months === 0) {
+                    values.push(initial);
+                } else {
+                    const fvInitial = initial * Math.pow(1 + monthlyRate, months);
+                    const fvPmt = pmt > 0 ? pmt * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate) : 0;
+                    values.push(Math.round(fvInitial + fvPmt));
+                }
+            }
+
+            // Atualizar cards de resumo
+            document.getElementById('proj-1y').innerText = formatBRL(values[1]);
+            document.getElementById('proj-3y').innerText = formatBRL(values[3]);
+            document.getElementById('proj-5y').innerText = formatBRL(values[5]);
+
+            const ctx = document.getElementById('projectionChart').getContext('2d');
+            if (projectionChartInstance) {
+                projectionChartInstance.destroy();
+            }
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+            gradient.addColorStop(0, 'rgba(79, 70, 229, 0.25)');
+            gradient.addColorStop(1, 'rgba(79, 70, 229, 0.0)');
+
+            projectionChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Patrimônio Projetado',
+                        data: values,
+                        borderColor: '#4f46e5',
+                        backgroundColor: gradient,
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.35,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#4f46e5',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return isPrivacyOn ? ' R$ •••••' : ' ' + formatBRL(context.parsed.y);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 11 }, color: '#64748b' }
+                        },
+                        y: {
+                            border: { display: false },
+                            grid: { color: '#f1f5f9' },
+                            ticks: {
+                                font: { size: 10 },
+                                color: '#94a3b8',
+                                callback: function(val) {
+                                    if (isPrivacyOn) return '•••';
+                                    return 'R$ ' + (val / 1000).toFixed(0) + 'k';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Modo Privacidade (Olho)
+        function togglePrivacy() {
+            isPrivacyOn = !isPrivacyOn;
+            const icon = document.getElementById('privacy-icon');
+            icon.setAttribute('data-lucide', isPrivacyOn ? 'eye-off' : 'eye');
+            lucide.createIcons();
+
+            document.querySelectorAll('.sensitive-data').forEach(el => {
+                if (isPrivacyOn) {
+                    el.classList.add('blur-value');
+                } else {
+                    el.classList.remove('blur-value');
+                }
+            });
+            renderProjectionChart();
+        }
+
+        // Simular Atualização de Cotações (4x ao dia)
+        function simulateQuoteRefresh() {
+            const icon = document.getElementById('refresh-icon');
+            const text = document.getElementById('last-update-text');
+            icon.classList.add('animate-spin');
+            text.innerText = "Buscando cotações B3...";
+            
+            setTimeout(() => {
+                icon.classList.remove('animate-spin');
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                text.innerText = `Cotações atualizadas às ${timeStr}`;
+            }, 800);
+        }
+
+        // Modal de Importação
+        function openImportModal() {
+            document.getElementById('import-modal').classList.remove('hidden');
+            document.getElementById('pdf-preview-box').classList.add('hidden');
+        }
+
+        function closeImportModal() {
+            document.getElementById('import-modal').classList.add('hidden');
+        }
+
+        function simulatePdfParse() {
+            document.getElementById('pdf-preview-box').classList.remove('hidden');
+        }
+
+        // Inicializar tela no carregamento
+        window.addEventListener('DOMContentLoaded', () => {
+            setScope('conjunto');
+        });
+    </script>
+</body>
+</html>
