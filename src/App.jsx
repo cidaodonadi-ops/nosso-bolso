@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlusCircle, Trash2, Moon, Sun, 
-  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle, Repeat, BellRing, BarChart3
+  PiggyBank, Plane, Wallet, Settings, Mic, MicOff, LogOut, Lock, Mail, Sparkles, PieChart, Users, CheckCircle2, Utensils, Edit3, X, Calendar, ArrowRightLeft, Filter, Fingerprint, KeyRound, Zap, Plus, AlertTriangle, Repeat, BellRing, BarChart3, TrendingUp
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -1174,7 +1174,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="flex gap-1.5 sm:gap-2 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto pb-2 scrollbar-none">
+        <nav className="flex items-center gap-1.5 sm:gap-2 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto pb-2 scrollbar-none">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: Wallet },
             { id: 'lancamentos', label: 'Lançamentos', icon: PlusCircle },
@@ -1197,6 +1197,14 @@ export default function App() {
               </button>
             );
           })}
+          
+          <a 
+            href="/investimentos/index.html" 
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20`}
+          >
+            <TrendingUp className="w-4 h-4"/>
+            📊 Investimentos
+          </a>
         </nav>
 
         {abaAtiva === 'dashboard' && (
